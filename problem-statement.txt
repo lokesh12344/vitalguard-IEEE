@@ -1,0 +1,19 @@
+Problem Statement 6
+
+HEALTHCARE
+
+VitalGuard: Smart Remote Monitoring for Home-Based Patient Care
+
+OVERVIEW
+
+After being discharged, many patients - especially elderly and post-operative individuals - find it difficult to consistently monitor their recovery, which can lead to avoidable complications and hospital readmissions. Vital signs such as temperature, heart rate, and oxygen levels often go untracked at home. VitalGuard is a remote monitoring platform that enables doctors and family members to observe patient vitals in real time. It acts as a bridge between hospital care and home recovery by triggering timely alerts when health parameters fluctuate.
+
+KEY FEATURES:
+
+• Multi-Sensor Dashboard – A real-time interface displaying vital signs such as temperature, heart rate, and oxygen levels (simulated or fetched from basic sensors like LM35).
+
+• Threshold-Based SOS Alerts – Automated WhatsApp/SMS notifications sent to doctors and family members when vitals cross predefined danger thresholds.
+
+• Medicine Adherence Log – A simple check-in system for patients to log medication intake, with reminders triggered for missed doses.
+
+• Doctor's Quick-View Portal – A consolidated view allowing medical professionals to monitor 24-hour health trends of multiple patients on a single screen.
