@@ -236,6 +236,7 @@ const PatientDashboard = () => {
         </div>
         <div>
           <SOSButton 
+            patientId={CURRENT_PATIENT_ID}
             patientName={patient?.name || 'Patient'}
             emergencyContact={patient?.emergencyContact || 'Emergency Services'}
             onSOS={handleSOSTriggered}

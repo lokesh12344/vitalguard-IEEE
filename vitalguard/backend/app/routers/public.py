@@ -638,3 +638,100 @@ async def mark_medication_taken(
     await db.commit()
     
     return {"status": "taken", "medication_id": medication_id, "taken_at": now.isoformat()}
+
+
+# SOS Request/Response Models
+class SOSRequest(BaseModel):
+    location: Optional[str] = None
+    message: Optional[str] = None
+
+
+class SOSResponse(BaseModel):
+    success: bool
+    patient_name: str
+    timestamp: str
+    notifications_sent: List[dict]
+    notifications_failed: List[dict]
+
+
+@router.post("/patients/{patient_id}/sos", response_model=SOSResponse)
+async def trigger_sos_alert(
+    patient_id: int,
+    sos_data: SOSRequest = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Trigger emergency SOS alert for a patient.
+    
+    Sends SMS notifications to:
+    - Emergency contact
+    - Assigned doctor
+    - Configured alert numbers
+    
+    Also creates an emergency alert record in the database.
+    """
+    from app.services.twilio import twilio_service
+    
+    # Get patient with user info
+    result = await db.execute(
+        select(Patient)
+        .options(selectinload(Patient.user))
+        .where(Patient.id == patient_id)
+    )
+    patient = result.scalar_one_or_none()
+    
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Get doctor info if assigned
+    doctor_name = None
+    doctor_phone = None
+    if patient.primary_doctor_id:
+        result = await db.execute(
+            select(User).where(User.id == patient.primary_doctor_id)
+        )
+        doctor = result.scalar_one_or_none()
+        if doctor:
+            doctor_name = doctor.full_name
+            doctor_phone = doctor.phone
+    
+    # Send SOS via Twilio
+    sos_result = await twilio_service.send_sos_alert(
+        patient_name=patient.user.full_name,
+        patient_phone=patient.user.phone or "Not provided",
+        emergency_contact_name=patient.emergency_contact_name or "Emergency Contact",
+        emergency_contact_phone=patient.emergency_contact_phone,
+        doctor_name=doctor_name,
+        doctor_phone=doctor_phone,
+        location=sos_data.location if sos_data else None,
+        message=sos_data.message if sos_data else None
+    )
+    
+    # Create emergency alert in database
+    from app.models.alert import AlertType
+    emergency_alert = Alert(
+        patient_id=patient_id,
+        alert_type=AlertType.VITAL_CRITICAL,
+        severity=AlertSeverity.EMERGENCY,
+        vital_type="SOS",
+        vital_value=0,
+        message=f"🚨 Emergency SOS triggered by {patient.user.full_name}. "
+                f"{sos_data.message if sos_data and sos_data.message else 'Immediate assistance required.'}",
+        is_acknowledged=False,
+        notification_sent=True,
+        notification_channels="SMS"
+    )
+    db.add(emergency_alert)
+    await db.commit()
+    
+    timestamp = datetime.utcnow().isoformat()
+    
+    # SOS is considered successful if alert was recorded, even if SMS failed
+    # This ensures patient knows help request was logged
+    return SOSResponse(
+        success=True,  # Alert was recorded in database
+        patient_name=patient.user.full_name,
+        timestamp=timestamp,
+        notifications_sent=sos_result["notifications_sent"],
+        notifications_failed=sos_result["notifications_failed"]
+    )

@@ -108,6 +108,19 @@ class ApiService {
   async getCaretakerPatients(caretakerId) {
     return this.request(`/caretakers/${caretakerId}/patients`);
   }
+
+  // SOS Emergency endpoint
+  async triggerSOS(patientId, location = null, message = null) {
+    console.log('🆘 API triggerSOS called:', { patientId, location, message });
+    console.log('🔗 Full URL:', `${this.baseUrl}/patients/${patientId}/sos`);
+    return this.request(`/patients/${patientId}/sos`, {
+      method: 'POST',
+      body: JSON.stringify({
+        location,
+        message
+      }),
+    });
+  }
 }
 
 // Socket.IO connection for real-time updates

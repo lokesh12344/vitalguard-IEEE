@@ -199,5 +199,154 @@ class TwilioService:
             return False
 
 
+    async def send_sos_alert(
+        self,
+        patient_name: str,
+        patient_phone: str,
+        emergency_contact_name: str,
+        emergency_contact_phone: str,
+        doctor_name: str = None,
+        doctor_phone: str = None,
+        location: str = None,
+        message: str = None
+    ) -> dict:
+        """
+        Send emergency SOS alert via WhatsApp (preferred) or SMS to emergency contacts.
+        
+        Args:
+            patient_name: Name of the patient triggering SOS
+            patient_phone: Patient's phone number
+            emergency_contact_name: Name of emergency contact
+            emergency_contact_phone: Phone number of emergency contact
+            doctor_name: Assigned doctor's name
+            doctor_phone: Doctor's phone number
+            location: Patient's location (optional)
+            message: Custom message from patient (optional)
+        
+        Returns:
+            Dict with success status and details
+        """
+        import datetime
+        
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Build SOS message
+        sos_message = (
+            f"🚨 EMERGENCY SOS ALERT 🚨\n\n"
+            f"Patient: {patient_name}\n"
+            f"Time: {timestamp}\n"
+        )
+        
+        if location:
+            sos_message += f"Location: {location}\n"
+        
+        if message:
+            sos_message += f"\nMessage: {message}\n"
+        
+        sos_message += (
+            f"\n⚠️ IMMEDIATE ATTENTION REQUIRED\n"
+            f"Please contact the patient or emergency services immediately.\n"
+            f"Patient Phone: {patient_phone}"
+        )
+        
+        results = {
+            "success": False,
+            "notifications_sent": [],
+            "notifications_failed": []
+        }
+        
+        recipients = []
+        
+        # Add emergency contact
+        if emergency_contact_phone:
+            recipients.append({
+                "name": emergency_contact_name,
+                "phone": emergency_contact_phone,
+                "role": "Emergency Contact"
+            })
+        
+        # Add doctor if available
+        if doctor_phone:
+            recipients.append({
+                "name": doctor_name,
+                "phone": doctor_phone,
+                "role": "Doctor"
+            })
+        
+        # Add configured alert numbers
+        for num in self._get_alert_recipients():
+            if num and num not in [r["phone"] for r in recipients]:
+                recipients.append({
+                    "name": "Healthcare Provider",
+                    "phone": num.replace("whatsapp:", ""),
+                    "role": "Configured Alert"
+                })
+        
+        if not self.enabled:
+            # Mock mode - log the messages
+            for recipient in recipients:
+                logger.info(f"[MOCK SOS] To: {recipient['name']} ({recipient['phone']})\n{sos_message}")
+                results["notifications_sent"].append({
+                    "recipient": recipient["name"],
+                    "phone": recipient["phone"],
+                    "role": recipient["role"],
+                    "status": "sent (mock)"
+                })
+            results["success"] = True
+            return results
+        
+        # Check if we should use WhatsApp (preferred to avoid SMS limits)
+        use_whatsapp = getattr(settings, 'use_whatsapp_for_sos', True)
+        
+        # Send alerts via WhatsApp or SMS
+        for recipient in recipients:
+            try:
+                phone = recipient["phone"]
+                # Clean phone number
+                phone = phone.replace("whatsapp:", "").replace("-", "").replace(" ", "")
+                
+                # Ensure proper format
+                if not phone.startswith("+"):
+                    phone = f"+91{phone}" if len(phone) == 10 else f"+{phone}"
+                
+                if use_whatsapp:
+                    # Send via WhatsApp Sandbox
+                    whatsapp_to = f"whatsapp:{phone}"
+                    self.client.messages.create(
+                        body=sos_message,
+                        from_=settings.twilio_whatsapp_from,
+                        to=whatsapp_to
+                    )
+                    logger.info(f"SOS WhatsApp sent to {recipient['name']} ({whatsapp_to})")
+                else:
+                    # Send via SMS
+                    self.client.messages.create(
+                        body=sos_message,
+                        from_=settings.twilio_sms_from,
+                        to=phone
+                    )
+                    logger.info(f"SOS SMS sent to {recipient['name']} ({phone})")
+                
+                results["notifications_sent"].append({
+                    "recipient": recipient["name"],
+                    "phone": phone,
+                    "role": recipient["role"],
+                    "status": "sent",
+                    "channel": "WhatsApp" if use_whatsapp else "SMS"
+                })
+                results["success"] = True
+                
+            except TwilioException as e:
+                logger.error(f"Failed to send SOS to {recipient['name']}: {e}")
+                results["notifications_failed"].append({
+                    "recipient": recipient["name"],
+                    "phone": recipient["phone"],
+                    "role": recipient["role"],
+                    "error": str(e)
+                })
+        
+        return results
+
+
 # Singleton instance
 twilio_service = TwilioService()

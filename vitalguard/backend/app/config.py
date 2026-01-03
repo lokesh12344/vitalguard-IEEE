@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_whatsapp_from: str = "whatsapp:+14155238886"
+    twilio_sms_from: str = ""  # Your Twilio SMS number
+    whatsapp_content_sid: str = ""  # WhatsApp template content SID
+    use_whatsapp_for_sos: bool = True  # Use WhatsApp instead of SMS for SOS
     
     # Alert settings
     alert_phone_numbers: str = ""
