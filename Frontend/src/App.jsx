@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ThemeProvider } from '@/context/ThemeContext';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import PatientDashboard from '@/pages/PatientDashboard';
 import DoctorDashboard from '@/pages/DoctorDashboard';
@@ -25,9 +26,11 @@ function App() {
   };
 
   return (
-    <DashboardLayout currentRole={currentRole} onRoleChange={handleRoleChange}>
-      {renderDashboard()}
-    </DashboardLayout>
+    <ThemeProvider>
+      <DashboardLayout currentRole={currentRole} onRoleChange={handleRoleChange}>
+        {renderDashboard()}
+      </DashboardLayout>
+    </ThemeProvider>
   );
 }
 

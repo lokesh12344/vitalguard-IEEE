@@ -41,7 +41,7 @@ const SOSButton = ({
         <Button 
           variant="danger" 
           size="xl"
-          className="w-full gap-3 animate-pulse hover:animate-none shadow-lg shadow-red-200"
+          className="w-full gap-3 animate-pulse hover:animate-none shadow-lg shadow-red-200 dark:shadow-red-900/50"
         >
           <AlertTriangle className="h-6 w-6" />
           Emergency SOS
@@ -69,11 +69,11 @@ const SOSButton = ({
         </DialogHeader>
         
         {!triggered && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 my-2">
-            <p className="text-sm text-red-800 font-medium mb-2">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 my-2">
+            <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-2">
               This alert will notify:
             </p>
-            <ul className="text-sm text-red-700 space-y-1">
+            <ul className="text-sm text-red-700 dark:text-red-400 space-y-1">
               <li className="flex items-center gap-2">
                 <Phone className="h-4 w-4" />
                 Emergency Contact: {emergencyContact}
@@ -91,8 +91,8 @@ const SOSButton = ({
         )}
 
         {triggered ? (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="text-green-700 text-sm">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+            <p className="text-green-700 dark:text-green-300 text-sm">
               Help is on the way. Please stay calm and wait for assistance.
               Your location and vital signs have been shared with emergency responders.
             </p>

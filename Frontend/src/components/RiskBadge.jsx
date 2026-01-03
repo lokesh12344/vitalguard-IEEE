@@ -54,20 +54,20 @@ export const RiskIndicator = ({ level, score, factors = [], className }) => {
   const Icon = iconMap[level] || Shield;
   
   const bgColorMap = {
-    low: 'bg-green-50 border-green-200',
-    medium: 'bg-yellow-50 border-yellow-200',
-    high: 'bg-red-50 border-red-200',
+    low: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900',
+    medium: 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/30 dark:border-yellow-900',
+    high: 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900',
   };
   
   const textColorMap = {
-    low: 'text-green-700',
-    medium: 'text-yellow-700',
-    high: 'text-red-700',
+    low: 'text-green-700 dark:text-green-400',
+    medium: 'text-yellow-700 dark:text-yellow-400',
+    high: 'text-red-700 dark:text-red-400',
   };
 
   return (
     <div className={cn(
-      "p-4 rounded-lg border",
+      "p-4 rounded-lg border transition-colors",
       bgColorMap[level],
       className
     )}>
@@ -89,14 +89,14 @@ export const RiskIndicator = ({ level, score, factors = [], className }) => {
       </div>
       {factors.length > 0 && (
         <div className="space-y-1 mt-3 pt-3 border-t border-current/10">
-          <p className="text-xs font-medium text-gray-600 mb-2">Risk Factors:</p>
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Risk Factors:</p>
           {factors.map((factor, index) => (
             <div key={index} className="flex justify-between text-sm">
-              <span className="text-gray-600">{factor.name}</span>
+              <span className="text-gray-600 dark:text-gray-400">{factor.name}</span>
               <span className={cn(
                 "font-medium",
-                factor.impact === 'high' ? 'text-red-600' : 
-                factor.impact === 'moderate' ? 'text-yellow-600' : 'text-green-600'
+                factor.impact === 'high' ? 'text-red-600 dark:text-red-400' : 
+                factor.impact === 'moderate' ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
               )}>
                 {factor.value}
               </span>

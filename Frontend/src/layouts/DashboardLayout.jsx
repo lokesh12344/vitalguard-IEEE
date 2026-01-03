@@ -1,15 +1,16 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { useTheme } from '@/context/ThemeContext';
 import { 
   Activity, 
   User, 
   Stethoscope, 
   Heart,
   Bell,
-  Settings,
-  LogOut,
   Menu,
-  X
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -35,40 +36,40 @@ const roleConfig = {
 };
 
 const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
-  const [sidebarOpen, setSidebarOpen] = React.useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const { isDark, toggleTheme } = useTheme();
 
   const RoleIcon = roleConfig[currentRole]?.icon || User;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
       {/* Top Navigation Bar */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+      <header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 sticky top-0 z-40 transition-colors duration-300">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
               <button
-                className="lg:hidden p-2 rounded-md text-gray-500 hover:bg-gray-100"
+                className="lg:hidden p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               >
                 {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
               </button>
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/25">
                   <Activity className="h-6 w-6 text-white" />
                 </div>
                 <div className="hidden sm:block">
-                  <h1 className="text-xl font-bold text-gray-900">VitalGuard</h1>
-                  <p className="text-xs text-gray-500">Smart Remote Monitoring</p>
+                  <h1 className="text-xl font-bold text-gray-900 dark:text-white">VitalGuard</h1>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Smart Remote Monitoring</p>
                 </div>
               </div>
             </div>
 
             {/* Role Switcher */}
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500 hidden sm:inline">Demo Mode:</span>
-              <div className="flex bg-gray-100 rounded-lg p-1">
+              <span className="text-sm text-gray-500 dark:text-gray-400 hidden sm:inline">Demo Mode:</span>
+              <div className="flex bg-gray-100 dark:bg-slate-800 rounded-lg p-1 transition-colors">
                 {Object.entries(roleConfig).map(([role, config]) => {
                   const Icon = config.icon;
                   return (
@@ -78,8 +79,8 @@ const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
                       className={cn(
                         "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
                         currentRole === role
-                          ? "bg-white text-gray-900 shadow-sm"
-                          : "text-gray-600 hover:text-gray-900"
+                          ? "bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm"
+                          : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                       )}
                     >
                       <Icon className="h-4 w-4" />
@@ -92,22 +93,41 @@ const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
 
             {/* Right side actions */}
             <div className="flex items-center gap-2">
+              {/* Theme Toggle */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={toggleTheme}
+                className="relative group"
+              >
+                <div className="relative w-5 h-5">
+                  <Sun className={cn(
+                    "h-5 w-5 absolute inset-0 text-amber-500 transition-all duration-300",
+                    isDark ? "opacity-0 rotate-90 scale-0" : "opacity-100 rotate-0 scale-100"
+                  )} />
+                  <Moon className={cn(
+                    "h-5 w-5 absolute inset-0 text-blue-400 transition-all duration-300",
+                    isDark ? "opacity-100 rotate-0 scale-100" : "opacity-0 -rotate-90 scale-0"
+                  )} />
+                </div>
+              </Button>
+              
               <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5 text-gray-600" />
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
+                <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs text-white flex items-center justify-center animate-pulse">
                   3
                 </span>
               </Button>
-              <div className="hidden sm:flex items-center gap-2 pl-4 border-l border-gray-200">
+              <div className="hidden sm:flex items-center gap-2 pl-4 border-l border-gray-200 dark:border-slate-700">
                 <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-white", roleConfig[currentRole].color)}>
                   <RoleIcon className="h-4 w-4" />
                 </div>
                 <div className="hidden md:block">
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {currentRole === 'patient' ? 'John Smith' : 
                      currentRole === 'doctor' ? 'Dr. Sarah Chen' : 'Care Assistant'}
                   </p>
-                  <p className="text-xs text-gray-500">{roleConfig[currentRole].label} View</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{roleConfig[currentRole].label} View</p>
                 </div>
               </div>
             </div>
@@ -117,19 +137,19 @@ const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
 
       {/* Mobile Navigation */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-30 bg-black/50" onClick={() => setMobileMenuOpen(false)}>
+        <div className="lg:hidden fixed inset-0 z-30 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)}>
           <div 
-            className="fixed inset-y-0 left-0 w-64 bg-white shadow-xl"
+            className="fixed inset-y-0 left-0 w-64 bg-white dark:bg-slate-900 shadow-xl transition-colors"
             onClick={e => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-gray-200">
+            <div className="p-4 border-b border-gray-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
                   <Activity className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-gray-900">VitalGuard</h1>
-                  <p className="text-xs text-gray-500">Remote Monitoring</p>
+                  <h1 className="text-lg font-bold text-gray-900 dark:text-white">VitalGuard</h1>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Remote Monitoring</p>
                 </div>
               </div>
             </div>
@@ -146,8 +166,8 @@ const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
                     className={cn(
                       "flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-all",
                       currentRole === role
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-gray-600 hover:bg-gray-100"
+                        ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800"
                     )}
                   >
                     <Icon className="h-5 w-5" />
@@ -158,6 +178,20 @@ const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
                   </button>
                 );
               })}
+              
+              {/* Mobile Theme Toggle */}
+              <div className="pt-4 border-t border-gray-200 dark:border-slate-800 mt-4">
+                <button
+                  onClick={toggleTheme}
+                  className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-all"
+                >
+                  {isDark ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-blue-500" />}
+                  <div>
+                    <p className="font-medium">{isDark ? 'Light Mode' : 'Dark Mode'}</p>
+                    <p className="text-xs opacity-75">Switch appearance</p>
+                  </div>
+                </button>
+              </div>
             </nav>
           </div>
         </div>
@@ -171,13 +205,13 @@ const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-auto">
+      <footer className="bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 mt-auto transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               © 2026 VitalGuard – Smart Remote Monitoring for Home-Based Patient Care
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 dark:text-gray-500">
               Demo Version • Data shown is simulated for demonstration purposes
             </p>
           </div>

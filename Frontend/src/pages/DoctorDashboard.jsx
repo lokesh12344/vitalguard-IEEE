@@ -40,12 +40,12 @@ const DoctorDashboard = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Doctor Dashboard</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Doctor Dashboard</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
             Welcome, Dr. Sarah Chen. You have {dashboardStats.totalPatients} patients under your care.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <Calendar className="h-4 w-4" />
           {new Date().toLocaleDateString('en-US', { 
             weekday: 'long', 
@@ -62,37 +62,24 @@ const DoctorDashboard = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Total Patients</p>
-                <p className="text-2xl font-bold text-gray-900">{dashboardStats.totalPatients}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Patients</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{dashboardStats.totalPatients}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <Users className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-red-600">High Risk</p>
-                <p className="text-2xl font-bold text-red-700">{dashboardStats.highRiskCount}</p>
-              </div>
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-950/50 rounded-full flex items-center justify-center">
+                <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/50">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Active Alerts</p>
-                <p className="text-2xl font-bold text-gray-900">{dashboardStats.activeAlerts}</p>
+                <p className="text-sm text-red-600 dark:text-red-400">High Risk</p>
+                <p className="text-2xl font-bold text-red-700 dark:text-red-400">{dashboardStats.highRiskCount}</p>
               </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                <Activity className="h-6 w-6 text-orange-600" />
+              <div className="w-12 h-12 bg-red-100 dark:bg-red-900/50 rounded-full flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
               </div>
             </div>
           </CardContent>
@@ -101,11 +88,24 @@ const DoctorDashboard = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Avg. Adherence</p>
-                <p className="text-2xl font-bold text-gray-900">{dashboardStats.averageAdherence}%</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Active Alerts</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{dashboardStats.activeAlerts}</p>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-green-600" />
+              <div className="w-12 h-12 bg-orange-100 dark:bg-orange-950/50 rounded-full flex items-center justify-center">
+                <Activity className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Avg. Adherence</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{dashboardStats.averageAdherence}%</p>
+              </div>
+              <div className="w-12 h-12 bg-green-100 dark:bg-green-950/50 rounded-full flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
             </div>
           </CardContent>
@@ -128,7 +128,7 @@ const DoctorDashboard = () => {
         <div className="lg:col-span-2">
           {selectedPatient ? (
             <Card className="h-full">
-              <CardHeader className="border-b">
+              <CardHeader className="border-b dark:border-slate-700">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4">
                     <div className={cn(
@@ -140,7 +140,7 @@ const DoctorDashboard = () => {
                     </div>
                     <div>
                       <CardTitle className="text-xl">{selectedPatient.name}</CardTitle>
-                      <p className="text-sm text-gray-500 mt-1">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                         {selectedPatient.age} years old • {selectedPatient.gender} • ID: {selectedPatient.id}
                       </p>
                       <div className="flex items-center gap-2 mt-2">
@@ -150,7 +150,7 @@ const DoctorDashboard = () => {
                           score={selectedPatient.riskScore}
                           size="lg"
                         />
-                        <Badge variant="outline" className="text-gray-500">
+                        <Badge variant="outline" className="text-gray-500 dark:text-gray-400">
                           <Clock className="h-3 w-3 mr-1" />
                           Updated {formatTimeAgo(selectedPatient.lastUpdated)}
                         </Badge>
@@ -166,30 +166,30 @@ const DoctorDashboard = () => {
                 {/* Patient Info */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500">Condition</p>
-                    <p className="text-gray-900">{selectedPatient.condition}</p>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Condition</p>
+                    <p className="text-gray-900 dark:text-white">{selectedPatient.condition}</p>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500">Caretaker</p>
-                    <p className="text-gray-900">{selectedPatient.caretaker}</p>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Caretaker</p>
+                    <p className="text-gray-900 dark:text-white">{selectedPatient.caretaker}</p>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500 flex items-center gap-1">
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
                       <Phone className="h-3 w-3" /> Emergency Contact
                     </p>
-                    <p className="text-gray-900">{selectedPatient.emergencyContact}</p>
+                    <p className="text-gray-900 dark:text-white">{selectedPatient.emergencyContact}</p>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500 flex items-center gap-1">
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
                       <MapPin className="h-3 w-3" /> Address
                     </p>
-                    <p className="text-gray-900">{selectedPatient.address}</p>
+                    <p className="text-gray-900 dark:text-white">{selectedPatient.address}</p>
                   </div>
                 </div>
 
                 {/* Current Vitals */}
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
                     <Activity className="h-5 w-5 text-blue-500" />
                     Current Vitals
                   </h3>
@@ -240,7 +240,7 @@ const DoctorDashboard = () => {
 
                 {/* Medications */}
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
                     <Pill className="h-5 w-5 text-blue-500" />
                     Medication Adherence
                   </h3>
@@ -248,14 +248,14 @@ const DoctorDashboard = () => {
                     {selectedPatient.medications.map((med, index) => (
                       <div 
                         key={index}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-700"
                       >
                         <div>
-                          <p className="font-medium text-gray-800">{med.name}</p>
-                          <p className="text-sm text-gray-500">{med.dosage} • {med.schedule}</p>
+                          <p className="font-medium text-gray-800 dark:text-gray-200">{med.name}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{med.dosage} • {med.schedule}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div className="w-24 bg-gray-200 dark:bg-slate-700 rounded-full h-2">
                             <div 
                               className={cn(
                                 "h-2 rounded-full",
@@ -265,7 +265,7 @@ const DoctorDashboard = () => {
                               style={{ width: `${med.adherence}%` }}
                             />
                           </div>
-                          <span className="text-sm font-medium text-gray-600 w-12">
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-12">
                             {med.adherence}%
                           </span>
                         </div>
@@ -277,7 +277,7 @@ const DoctorDashboard = () => {
                 {/* Active Alerts */}
                 {selectedPatient.alerts.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
                       <AlertTriangle className="h-5 w-5 text-orange-500" />
                       Alerts
                     </h3>
@@ -296,22 +296,22 @@ const DoctorDashboard = () => {
 
                 {/* Notes */}
                 {selectedPatient.notes && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h4 className="font-medium text-blue-800 flex items-center gap-2 mb-2">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <h4 className="font-medium text-blue-800 dark:text-blue-300 flex items-center gap-2 mb-2">
                       <FileText className="h-4 w-4" />
                       Clinical Notes
                     </h4>
-                    <p className="text-sm text-blue-700">{selectedPatient.notes}</p>
+                    <p className="text-sm text-blue-700 dark:text-blue-200">{selectedPatient.notes}</p>
                   </div>
                 )}
               </CardContent>
             </Card>
           ) : (
-            <Card className="h-full flex items-center justify-center">
+            <Card className="h-full flex items-center justify-center dark:bg-slate-800/50 dark:border-slate-700">
               <CardContent className="text-center py-12">
-                <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-500">Select a Patient</h3>
-                <p className="text-sm text-gray-400 mt-2">
+                <Users className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400">Select a Patient</h3>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
                   Click on a patient from the list to view their detailed health information
                 </p>
               </CardContent>

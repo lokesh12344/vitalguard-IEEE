@@ -12,6 +12,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTheme } from '@/context/ThemeContext';
 
 ChartJS.register(
   CategoryScale,
@@ -36,6 +37,7 @@ const VitalsChart = ({
   secondaryLabel = 'Secondary',
   secondaryColor = '#ef4444'
 }) => {
+  const { isDark } = useTheme();
   const labels = data.map(point => point.label);
   const values = data.map(point => point.value);
 
@@ -75,11 +77,14 @@ const VitalsChart = ({
       legend: {
         display: showLegend,
         position: 'top',
+        labels: {
+          color: isDark ? '#94a3b8' : '#64748b',
+        },
       },
       tooltip: {
         mode: 'index',
         intersect: false,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backgroundColor: isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(0, 0, 0, 0.8)',
         titleColor: '#fff',
         bodyColor: '#fff',
         borderColor: color,
@@ -96,22 +101,28 @@ const VitalsChart = ({
         },
         ticks: {
           maxTicksLimit: 8,
-          color: '#64748b',
+          color: isDark ? '#64748b' : '#64748b',
           font: {
             size: 11,
           },
+        },
+        border: {
+          color: isDark ? '#334155' : '#e2e8f0',
         },
       },
       y: {
         display: true,
         grid: {
-          color: '#e2e8f0',
+          color: isDark ? '#1e293b' : '#e2e8f0',
         },
         ticks: {
-          color: '#64748b',
+          color: isDark ? '#64748b' : '#64748b',
           font: {
             size: 11,
           },
+        },
+        border: {
+          color: isDark ? '#334155' : '#e2e8f0',
         },
       },
     },
@@ -125,7 +136,7 @@ const VitalsChart = ({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg font-semibold text-gray-700">{title}</CardTitle>
+        <CardTitle className="text-lg font-semibold text-gray-700 dark:text-gray-200">{title}</CardTitle>
       </CardHeader>
       <CardContent>
         <div style={{ height: `${height}px` }}>

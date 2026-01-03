@@ -13,7 +13,7 @@ const MedicationTracker = ({ medications, title = "Today's Medications", showAdh
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold text-gray-700 flex items-center gap-2">
+          <CardTitle className="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
             <Pill className="h-5 w-5 text-blue-500" />
             {title}
           </CardTitle>
@@ -23,11 +23,11 @@ const MedicationTracker = ({ medications, title = "Today's Medications", showAdh
         </div>
         {showAdherence && (
           <div className="mt-2">
-            <div className="flex justify-between text-sm text-gray-600 mb-1">
+            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
               <span>Adherence</span>
               <span>{adherencePercent}%</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2">
               <div 
                 className={cn(
                   "h-2 rounded-full transition-all",
@@ -46,14 +46,14 @@ const MedicationTracker = ({ medications, title = "Today's Medications", showAdh
             className={cn(
               "flex items-center justify-between p-3 rounded-lg border transition-all",
               med.taken 
-                ? "bg-green-50 border-green-200" 
-                : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                ? "bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900" 
+                : "bg-gray-50 border-gray-200 hover:bg-gray-100 dark:bg-slate-800/50 dark:border-slate-700 dark:hover:bg-slate-800"
             )}
           >
             <div className="flex items-center gap-3">
               <div className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center",
-                med.taken ? "bg-green-500" : "bg-gray-300"
+                med.taken ? "bg-green-500" : "bg-gray-300 dark:bg-slate-600"
               )}>
                 {med.taken ? (
                   <Check className="h-4 w-4 text-white" />
@@ -62,10 +62,10 @@ const MedicationTracker = ({ medications, title = "Today's Medications", showAdh
                 )}
               </div>
               <div>
-                <p className="font-medium text-gray-800">{med.name}</p>
-                <p className="text-sm text-gray-500">{med.dosage} • {med.schedule}</p>
+                <p className="font-medium text-gray-800 dark:text-gray-200">{med.name}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{med.dosage} • {med.schedule}</p>
                 {med.purpose && (
-                  <p className="text-xs text-gray-400 mt-0.5">{med.purpose}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{med.purpose}</p>
                 )}
               </div>
             </div>
@@ -74,11 +74,11 @@ const MedicationTracker = ({ medications, title = "Today's Medications", showAdh
                 <div>
                   <Badge variant="success">Taken</Badge>
                   {med.takenAt && (
-                    <p className="text-xs text-gray-500 mt-1">{med.takenAt}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{med.takenAt}</p>
                   )}
                 </div>
               ) : (
-                <Badge variant="outline" className="text-gray-500">
+                <Badge variant="outline" className="text-gray-500 dark:text-gray-400">
                   Pending
                 </Badge>
               )}

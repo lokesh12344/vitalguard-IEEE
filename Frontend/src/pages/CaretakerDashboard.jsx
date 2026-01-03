@@ -67,12 +67,12 @@ const CaretakerDashboard = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Caretaker Dashboard</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Caretaker Dashboard</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
             Monitor and care for your linked patients
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <Calendar className="h-4 w-4" />
           {new Date().toLocaleDateString('en-US', { 
             weekday: 'long', 
@@ -85,7 +85,7 @@ const CaretakerDashboard = () => {
 
       {/* Linked Patients Selector */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-700 mb-3 flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
           <User className="h-5 w-5 text-purple-500" />
           Linked Patients
         </h2>
@@ -94,8 +94,8 @@ const CaretakerDashboard = () => {
             <Card 
               key={patient.id}
               className={cn(
-                "cursor-pointer transition-all hover:shadow-md",
-                selectedPatient?.id === patient.id && "ring-2 ring-purple-500 bg-purple-50"
+                "cursor-pointer transition-all hover:shadow-md dark:bg-slate-800/50 dark:border-slate-700",
+                selectedPatient?.id === patient.id && "ring-2 ring-purple-500 bg-purple-50 dark:bg-purple-900/30"
               )}
               onClick={() => setSelectedPatient(patient)}
             >
@@ -109,8 +109,8 @@ const CaretakerDashboard = () => {
                     {patient.avatar}
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-gray-800">{patient.name}</h3>
-                    <p className="text-sm text-gray-500">{patient.age} yrs • {patient.condition.split(',')[0]}</p>
+                    <h3 className="font-semibold text-gray-800 dark:text-gray-100">{patient.name}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{patient.age} yrs • {patient.condition.split(',')[0]}</p>
                   </div>
                   <RiskBadge level={patient.riskLevel} showIcon={false} />
                 </div>
@@ -125,14 +125,14 @@ const CaretakerDashboard = () => {
           {/* Current Health Status */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Patient Status Card */}
-            <Card className="lg:col-span-2">
+            <Card className="lg:col-span-2 dark:bg-slate-800/50 dark:border-slate-700">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 dark:text-white">
                     <Heart className="h-5 w-5 text-red-500" />
                     {selectedPatient.name}'s Health Status
                   </CardTitle>
-                  <Badge variant="outline" className="text-gray-500">
+                  <Badge variant="outline" className="text-gray-500 dark:text-gray-400 dark:border-slate-600">
                     <Clock className="h-3 w-3 mr-1" />
                     Updated {formatTimeAgo(selectedPatient.lastUpdated)}
                   </Badge>
@@ -173,9 +173,9 @@ const CaretakerDashboard = () => {
             </Card>
 
             {/* Emergency Contact Buttons */}
-            <Card>
+            <Card className="dark:bg-slate-800/50 dark:border-slate-700">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
+                <CardTitle className="flex items-center gap-2 text-lg dark:text-white">
                   <Phone className="h-5 w-5 text-green-500" />
                   Emergency Contacts
                 </CardTitle>
@@ -205,11 +205,11 @@ const CaretakerDashboard = () => {
                   <MessageCircle className="h-4 w-4" />
                   Contact Family
                 </Button>
-                <div className="pt-2 border-t">
-                  <p className="text-xs text-gray-500 mb-1">Assigned Doctor:</p>
-                  <p className="text-sm font-medium">{selectedPatient.assignedDoctor}</p>
-                  <p className="text-xs text-gray-500 mt-2 mb-1">Emergency Contact:</p>
-                  <p className="text-sm font-medium">{selectedPatient.emergencyContact}</p>
+                <div className="pt-2 border-t dark:border-slate-700">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Assigned Doctor:</p>
+                  <p className="text-sm font-medium dark:text-gray-100">{selectedPatient.assignedDoctor}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 mb-1">Emergency Contact:</p>
+                  <p className="text-sm font-medium dark:text-gray-100">{selectedPatient.emergencyContact}</p>
                 </div>
               </CardContent>
             </Card>
@@ -218,18 +218,18 @@ const CaretakerDashboard = () => {
           {/* Daily Summary & Alerts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Daily Summary */}
-            <Card>
+            <Card className="dark:bg-slate-800/50 dark:border-slate-700">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
+                <CardTitle className="flex items-center gap-2 text-lg dark:text-white">
                   <Calendar className="h-5 w-5 text-blue-500" />
                   Today's Summary
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Medication Status */}
-                <div className="bg-blue-50 rounded-lg p-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-blue-800 flex items-center gap-2">
+                    <span className="font-medium text-blue-800 dark:text-blue-300 flex items-center gap-2">
                       <Pill className="h-4 w-4" />
                       Medication Adherence
                     </span>
@@ -240,7 +240,7 @@ const CaretakerDashboard = () => {
                   <div className="space-y-2">
                     {selectedPatient.medications.map((med, index) => (
                       <div key={index} className="flex items-center justify-between text-sm">
-                        <span className="text-blue-700">{med.name}</span>
+                        <span className="text-blue-700 dark:text-blue-200">{med.name}</span>
                         <div className="flex items-center gap-2">
                           {med.adherence >= 80 ? (
                             <CheckCircle className="h-4 w-4 text-green-500" />
@@ -260,40 +260,40 @@ const CaretakerDashboard = () => {
                 </div>
 
                 {/* Alert Summary */}
-                <div className="bg-orange-50 rounded-lg p-4">
+                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="font-medium text-orange-800 flex items-center gap-2">
+                    <span className="font-medium text-orange-800 dark:text-orange-300 flex items-center gap-2">
                       <Bell className="h-4 w-4" />
                       Alert Summary
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-red-600">{summary.activeAlerts}</p>
-                      <p className="text-xs text-gray-600">Active Alerts</p>
+                      <p className="text-2xl font-bold text-red-600 dark:text-red-400">{summary.activeAlerts}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Active Alerts</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-green-600">{summary.resolvedAlerts}</p>
-                      <p className="text-xs text-gray-600">Resolved Today</p>
+                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">{summary.resolvedAlerts}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Resolved Today</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Quick Stats */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-green-50 rounded-lg p-3 text-center">
+                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
                     <Activity className="h-5 w-5 text-green-500 mx-auto mb-1" />
-                    <p className="text-lg font-bold text-green-700">
+                    <p className="text-lg font-bold text-green-700 dark:text-green-400">
                       {selectedPatient.vitals.current.heartRate.value}
                     </p>
-                    <p className="text-xs text-green-600">Current HR</p>
+                    <p className="text-xs text-green-600 dark:text-green-300">Current HR</p>
                   </div>
-                  <div className="bg-purple-50 rounded-lg p-3 text-center">
+                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-center">
                     <Activity className="h-5 w-5 text-purple-500 mx-auto mb-1" />
-                    <p className="text-lg font-bold text-purple-700">
+                    <p className="text-lg font-bold text-purple-700 dark:text-purple-400">
                       {selectedPatient.vitals.current.spO2.value}%
                     </p>
-                    <p className="text-xs text-purple-600">Current SpO₂</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-300">Current SpO₂</p>
                   </div>
                 </div>
               </CardContent>
@@ -316,11 +316,11 @@ const CaretakerDashboard = () => {
 
           {/* Patient Notes */}
           {selectedPatient.notes && (
-            <Card>
+            <Card className="dark:bg-slate-800/50 dark:border-slate-700">
               <CardContent className="p-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h4 className="font-medium text-gray-700 mb-2">Care Notes</h4>
-                  <p className="text-sm text-gray-600">{selectedPatient.notes}</p>
+                <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-700 dark:text-gray-200 mb-2">Care Notes</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">{selectedPatient.notes}</p>
                 </div>
               </CardContent>
             </Card>
@@ -339,25 +339,25 @@ const CaretakerDashboard = () => {
             </DialogTitle>
             <DialogDescription>
               {callType === 'emergency' ? (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
-                  <p className="text-red-800 font-medium">
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mt-4">
+                  <p className="text-red-800 dark:text-red-300 font-medium">
                     You are about to call 911 Emergency Services.
                   </p>
-                  <p className="text-sm text-red-700 mt-2">
+                  <p className="text-sm text-red-700 dark:text-red-400 mt-2">
                     Only proceed if this is a genuine medical emergency.
                   </p>
                 </div>
               ) : callType === 'doctor' ? (
                 <div className="mt-4">
-                  <p className="text-gray-600">Calling {selectedPatient?.assignedDoctor}</p>
-                  <p className="text-sm text-gray-500 mt-2">
+                  <p className="text-gray-600 dark:text-gray-300">Calling {selectedPatient?.assignedDoctor}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                     The doctor will receive patient context before the call connects.
                   </p>
                 </div>
               ) : (
                 <div className="mt-4">
-                  <p className="text-gray-600">Contacting family at {selectedPatient?.emergencyContact}</p>
-                  <p className="text-sm text-gray-500 mt-2">
+                  <p className="text-gray-600 dark:text-gray-300">Contacting family at {selectedPatient?.emergencyContact}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                     You can share patient status updates with family members.
                   </p>
                 </div>

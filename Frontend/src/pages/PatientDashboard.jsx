@@ -39,12 +39,12 @@ const PatientDashboard = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Health Dashboard</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Health Dashboard</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
             Welcome back, John. Here's your health overview for today.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <Calendar className="h-4 w-4" />
           {dailySummary.date}
         </div>
@@ -65,7 +65,7 @@ const PatientDashboard = () => {
             emergencyContact="+1 (555) 123-4567"
             onSOS={handleSOSTriggered}
           />
-          <p className="text-xs text-gray-500 text-center mt-2">
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
             Press only in case of emergency
           </p>
         </div>
@@ -73,7 +73,7 @@ const PatientDashboard = () => {
 
       {/* Current Vitals */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center gap-2">
           <Activity className="h-5 w-5 text-blue-500" />
           Current Vitals
         </h2>
@@ -165,36 +165,36 @@ const PatientDashboard = () => {
       {/* Daily Summary */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-700">
+          <CardTitle className="text-lg font-semibold text-gray-700 dark:text-gray-200">
             Today's Summary
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            <div className="bg-blue-50 rounded-lg p-4 text-center">
+            <div className="bg-blue-50 dark:bg-blue-950/50 rounded-lg p-4 text-center">
               <Activity className="h-6 w-6 text-blue-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-blue-700">{dailySummary.averageHeartRate}</p>
-              <p className="text-xs text-blue-600">Avg Heart Rate</p>
+              <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{dailySummary.averageHeartRate}</p>
+              <p className="text-xs text-blue-600 dark:text-blue-500">Avg Heart Rate</p>
             </div>
-            <div className="bg-green-50 rounded-lg p-4 text-center">
+            <div className="bg-green-50 dark:bg-green-950/50 rounded-lg p-4 text-center">
               <Footprints className="h-6 w-6 text-green-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-green-700">{dailySummary.stepsCount.toLocaleString()}</p>
-              <p className="text-xs text-green-600">Steps Today</p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-400">{dailySummary.stepsCount.toLocaleString()}</p>
+              <p className="text-xs text-green-600 dark:text-green-500">Steps Today</p>
             </div>
-            <div className="bg-purple-50 rounded-lg p-4 text-center">
+            <div className="bg-purple-50 dark:bg-purple-950/50 rounded-lg p-4 text-center">
               <Moon className="h-6 w-6 text-purple-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-purple-700">{dailySummary.sleepHours}h</p>
-              <p className="text-xs text-purple-600">Sleep Last Night</p>
+              <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">{dailySummary.sleepHours}h</p>
+              <p className="text-xs text-purple-600 dark:text-purple-500">Sleep Last Night</p>
             </div>
-            <div className="bg-cyan-50 rounded-lg p-4 text-center">
+            <div className="bg-cyan-50 dark:bg-cyan-950/50 rounded-lg p-4 text-center">
               <Droplets className="h-6 w-6 text-cyan-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-cyan-700">{dailySummary.hydrationGlasses}</p>
-              <p className="text-xs text-cyan-600">Glasses of Water</p>
+              <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-400">{dailySummary.hydrationGlasses}</p>
+              <p className="text-xs text-cyan-600 dark:text-cyan-500">Glasses of Water</p>
             </div>
-            <div className="bg-orange-50 rounded-lg p-4 text-center">
+            <div className="bg-orange-50 dark:bg-orange-950/50 rounded-lg p-4 text-center">
               <Activity className="h-6 w-6 text-orange-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-orange-700">{dailySummary.averageSpO2}%</p>
-              <p className="text-xs text-orange-600">Avg SpO₂</p>
+              <p className="text-2xl font-bold text-orange-700 dark:text-orange-400">{dailySummary.averageSpO2}%</p>
+              <p className="text-xs text-orange-600 dark:text-orange-500">Avg SpO₂</p>
             </div>
           </div>
         </CardContent>
