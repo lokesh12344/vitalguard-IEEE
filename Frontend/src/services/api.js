@@ -154,6 +154,47 @@ class ApiService {
   async getRecentRegistrations(limit = 10) {
     return this.request(`/admin/recent-registrations?limit=${limit}`);
   }
+
+  // ============== Chat API Methods ==============
+
+  // Get all conversations for a user
+  async getChatConversations(userId) {
+    return this.request(`/chat/conversations/${userId}`);
+  }
+
+  // Get messages between two users
+  async getChatMessages(userId, otherUserId, limit = 50) {
+    return this.request(`/chat/messages/${userId}/${otherUserId}?limit=${limit}`);
+  }
+
+  // Send a message
+  async sendChatMessage(senderId, receiverId, message) {
+    return this.request('/chat/send', {
+      method: 'POST',
+      body: JSON.stringify({
+        sender_id: senderId,
+        receiver_id: receiverId,
+        message: message
+      }),
+    });
+  }
+
+  // Mark messages as read
+  async markMessagesAsRead(userId, otherUserId) {
+    return this.request(`/chat/mark-read/${userId}/${otherUserId}`, {
+      method: 'POST',
+    });
+  }
+
+  // Get available contacts for a user based on their role
+  async getChatContacts(userId) {
+    return this.request(`/chat/contacts/${userId}`);
+  }
+
+  // Get unread message count
+  async getUnreadMessageCount(userId) {
+    return this.request(`/chat/unread-count/${userId}`);
+  }
 }
 
 // Global Alert Notification Service for real-time cross-dashboard communication
@@ -409,11 +450,16 @@ class WebSocketService {
       this.connected = false;
     }
   }
+
+  getSocket() {
+    return this.socket;
+  }
 }
 
 // Export singleton instances
 export const api = new ApiService();
 export const websocket = new WebSocketService();
+export const socketService = websocket;  // Alias for Chat component
 
 // Helper to transform API data to match existing frontend format
 export const transformPatientData = (apiPatient, vitals, medications, alerts) => {

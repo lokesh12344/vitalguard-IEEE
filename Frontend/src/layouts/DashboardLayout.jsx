@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/context/ThemeContext';
+import Chat, { ChatButton } from '@/components/Chat';
+import api from '@/services/api';
 import { 
   Activity, 
   User, 
@@ -44,7 +46,44 @@ const roleConfig = {
 
 const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { isDark, toggleTheme } = useTheme();
+
+  // Get current user based on role
+  const getCurrentUser = () => {
+    switch (currentRole) {
+      case 'patient':
+        return { id: 7, name: 'Ramesh Gupta', role: 'patient' };
+      case 'doctor':
+        return { id: 1, name: 'Dr. Priya Sharma', role: 'doctor' };
+      case 'caretaker':
+        return { id: 27, name: 'Advait Daware', role: 'caretaker' };
+      default:
+        return null;
+    }
+  };
+
+  const currentUser = getCurrentUser();
+
+  // Load unread message count
+  useEffect(() => {
+    const loadUnreadCount = async () => {
+      if (currentUser && currentRole !== 'admin') {
+        try {
+          const data = await api.getUnreadMessageCount(currentUser.id);
+          setUnreadCount(data?.unread_count || 0);
+        } catch (error) {
+          console.error('Failed to load unread count:', error);
+        }
+      }
+    };
+
+    loadUnreadCount();
+    // Refresh every 30 seconds
+    const interval = setInterval(loadUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [currentUser?.id, currentRole]);
 
   const RoleIcon = roleConfig[currentRole]?.icon || User;
 
@@ -118,6 +157,14 @@ const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
                   )} />
                 </div>
               </Button>
+              
+              {/* Chat Button - show for patient, doctor, caretaker */}
+              {currentRole !== 'admin' && currentUser && (
+                <ChatButton 
+                  onClick={() => setChatOpen(true)} 
+                  unreadCount={unreadCount} 
+                />
+              )}
               
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
@@ -225,6 +272,23 @@ const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
           </div>
         </div>
       </footer>
+
+      {/* Chat Modal */}
+      {currentUser && (
+        <Chat 
+          isOpen={chatOpen} 
+          onClose={() => {
+            setChatOpen(false);
+            // Refresh unread count when closing
+            if (currentUser) {
+              api.getUnreadMessageCount(currentUser.id)
+                .then(data => setUnreadCount(data?.unread_count || 0))
+                .catch(console.error);
+            }
+          }} 
+          currentUser={currentUser} 
+        />
+      )}
     </div>
   );
 };

@@ -93,6 +93,35 @@ class SocketManager:
             {"alert_id": alert_id, "acknowledged_by": acknowledged_by},
             room="alerts:all"
         )
+    
+    async def emit_chat_message(self, user_id: int, message_data: dict):
+        """Emit chat message to a specific user."""
+        room = f"user:{user_id}"
+        await self.sio.emit("chat:message", message_data, room=room)
+        logger.info(f"📩 Chat message sent to user {user_id}")
+    
+    async def emit_chat_read(self, sender_id: int, reader_id: int):
+        """Notify sender that their messages were read."""
+        room = f"user:{sender_id}"
+        await self.sio.emit("chat:read", {
+            "reader_id": reader_id,
+            "sender_id": sender_id
+        }, room=room)
+    
+    async def emit_chat_typing(self, receiver_id: int, sender_id: int, sender_name: str):
+        """Notify that a user is typing."""
+        room = f"user:{receiver_id}"
+        await self.sio.emit("chat:typing", {
+            "sender_id": sender_id,
+            "sender_name": sender_name
+        }, room=room)
+    
+    async def emit_chat_stop_typing(self, receiver_id: int, sender_id: int):
+        """Notify that a user stopped typing."""
+        room = f"user:{receiver_id}"
+        await self.sio.emit("chat:stop_typing", {
+            "sender_id": sender_id
+        }, room=room)
 
 
 # Create singleton instance
@@ -134,3 +163,44 @@ async def subscribe_alerts(sid, data):
     await sio.enter_room(sid, "alerts:all")
     logger.info(f"Client {sid} subscribed to all alerts")
     return {"status": "subscribed", "room": "alerts:all"}
+
+
+@sio.event
+async def subscribe_chat(sid, data):
+    """Subscribe to personal chat room for receiving messages."""
+    user_id = data.get("user_id")
+    if user_id:
+        room = f"user:{user_id}"
+        await sio.enter_room(sid, room)
+        logger.info(f"Client {sid} subscribed to chat room {room}")
+        return {"status": "subscribed", "room": room}
+
+
+@sio.event
+async def unsubscribe_chat(sid, data):
+    """Unsubscribe from personal chat room."""
+    user_id = data.get("user_id")
+    if user_id:
+        room = f"user:{user_id}"
+        await sio.leave_room(sid, room)
+        logger.info(f"Client {sid} unsubscribed from chat room {room}")
+        return {"status": "unsubscribed", "room": room}
+
+
+@sio.event
+async def typing(sid, data):
+    """Handle typing indicator."""
+    receiver_id = data.get("receiver_id")
+    sender_id = data.get("sender_id")
+    sender_name = data.get("sender_name", "Someone")
+    if receiver_id:
+        await socket_manager.emit_chat_typing(receiver_id, sender_id, sender_name)
+
+
+@sio.event
+async def stop_typing(sid, data):
+    """Handle stop typing indicator."""
+    receiver_id = data.get("receiver_id")
+    sender_id = data.get("sender_id")
+    if receiver_id:
+        await socket_manager.emit_chat_stop_typing(receiver_id, sender_id)
