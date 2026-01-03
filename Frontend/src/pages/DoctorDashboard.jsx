@@ -53,6 +53,8 @@ const DoctorDashboard = () => {
   const [showAlertPopup, setShowAlertPopup] = useState(false);
   const [latestAlert, setLatestAlert] = useState(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [triggeringSOS, setTriggeringSOS] = useState(false);
+  const [sosSuccess, setSosSuccess] = useState(false);
 
   // Subscribe to real-time high risk alerts via WebSocket
   useEffect(() => {
@@ -86,6 +88,8 @@ const DoctorDashboard = () => {
           const formattedAlert = {
             ...alert,
             id: alert.id || Date.now(),
+            patientId: alert.patient_id,  // Map snake_case to camelCase
+            patientName: alert.patient_name,  // Map snake_case to camelCase
             timestamp: alert.created_at || new Date().toISOString(),
             type: 'high_risk',
             acknowledged: false
@@ -126,8 +130,14 @@ const DoctorDashboard = () => {
     // Also keep in-memory alerts as fallback
     const unsubscribe = alertNotifications.onHighRiskAlert((alert) => {
       console.log('🚨 In-Memory Alert Received:', alert);
-      setRealtimeAlerts(prev => [alert, ...prev].slice(0, 20));
-      setLatestAlert(alert);
+      // Ensure patientId is set (could be from patient_id or patientId)
+      const formattedAlert = {
+        ...alert,
+        patientId: alert.patientId || alert.patient_id,
+        patientName: alert.patientName || alert.patient_name
+      };
+      setRealtimeAlerts(prev => [formattedAlert, ...prev].slice(0, 20));
+      setLatestAlert(formattedAlert);
       setShowAlertPopup(true);
       
       // Auto-hide popup after 10 seconds
@@ -388,28 +398,64 @@ const DoctorDashboard = () => {
                 <div className="flex gap-2 pt-2">
                   <Button 
                     size="sm" 
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                    onClick={() => {
-                      // Find and select the patient
-                      const patient = patientsByRisk.find(p => p.id === latestAlert.patientId);
-                      if (patient) {
-                        setSelectedPatient(patient);
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={async () => {
+                      // Acknowledge the alert
+                      try {
+                        if (latestAlert.id) {
+                          await api.acknowledgeAlert(latestAlert.id);
+                        }
+                        alertNotifications.acknowledgeAlert(latestAlert.id);
+                      } catch (err) {
+                        console.log('Error acknowledging alert:', err);
                       }
                       setShowAlertPopup(false);
+                      refetchAlerts();
                     }}
                   >
-                    View Patient
+                    ✓ Acknowledge
                   </Button>
                   <Button 
                     size="sm" 
-                    variant="outline" 
-                    className="border-red-500 text-red-600 hover:bg-red-100 dark:hover:bg-red-900"
-                    onClick={() => {
-                      alertNotifications.acknowledgeAlert(latestAlert.id);
-                      setShowAlertPopup(false);
+                    variant="destructive"
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                    disabled={triggeringSOS || sosSuccess}
+                    onClick={async () => {
+                      // Trigger Emergency SOS for this patient
+                      setTriggeringSOS(true);
+                      try {
+                        await api.triggerSOS(
+                          latestAlert.patientId,
+                          null,
+                          `Emergency SOS triggered by doctor for patient ${latestAlert.patientName}. Critical vitals detected.`
+                        );
+                        setSosSuccess(true);
+                        // Reset after 3 seconds
+                        setTimeout(() => {
+                          setSosSuccess(false);
+                          setShowAlertPopup(false);
+                        }, 3000);
+                      } catch (err) {
+                        console.error('SOS Error:', err);
+                        alert('Failed to send SOS: ' + err.message);
+                      } finally {
+                        setTriggeringSOS(false);
+                      }
                     }}
                   >
-                    Acknowledge
+                    {triggeringSOS ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        Sending...
+                      </>
+                    ) : sosSuccess ? (
+                      '✓ SOS Sent!'
+                    ) : (
+                      <>
+                        <Phone className="h-4 w-4 mr-1" />
+                        Emergency SOS
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>

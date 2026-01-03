@@ -38,11 +38,11 @@ const AlertBanner = ({
   if (compact) {
     return (
       <div className="space-y-2">
-        {displayAlerts.map((alert) => {
+        {displayAlerts.map((alert, index) => {
           const Icon = iconMap[alert.type] || Info;
           return (
             <div
-              key={alert.id}
+              key={`${alert.id}-${index}`}
               className={cn(
                 "flex items-center justify-between p-3 rounded-lg border",
                 colorMap[alert.type]
@@ -73,11 +73,11 @@ const AlertBanner = ({
           {displayAlerts.length === 0 ? (
             <p className="text-gray-500 dark:text-gray-400 text-center py-4">No alerts at this time</p>
           ) : (
-            displayAlerts.map((alert) => {
+            displayAlerts.map((alert, index) => {
               const Icon = iconMap[alert.type] || Info;
               return (
                 <div
-                  key={alert.id}
+                  key={`${alert.id}-${index}`}
                   className={cn(
                     "flex items-start justify-between p-4 rounded-lg border transition-all",
                     colorMap[alert.type],
