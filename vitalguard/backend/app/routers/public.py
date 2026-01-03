@@ -6,19 +6,23 @@ In production, these would require proper authentication.
 """
 
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from passlib.context import CryptContext
 
 from app.database import get_db
 from app.models.user import User, UserRole
-from app.models.patient import Patient, RiskLevel
+from app.models.patient import Patient, RiskLevel, AlertThreshold
 from app.models.vital import VitalReading
 from app.models.medication import Medication, MedicationLog, MedicationStatus
 from app.models.alert import Alert, AlertSeverity
+
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter(prefix="/public", tags=["Public API"])
 
@@ -735,3 +739,291 @@ async def trigger_sos_alert(
         notifications_sent=sos_result["notifications_sent"],
         notifications_failed=sos_result["notifications_failed"]
     )
+
+
+# =============================================================================
+# ADMIN / RECEPTIONIST PATIENT REGISTRATION
+# =============================================================================
+
+class InitialVitals(BaseModel):
+    """Initial vitals data for patient registration"""
+    heart_rate: float = Field(..., ge=30, le=220, description="Heart rate in bpm")
+    spo2: float = Field(..., ge=50, le=100, description="Oxygen saturation percentage")
+    temperature: float = Field(..., ge=35, le=42, description="Body temperature in Celsius")
+    blood_sugar: Optional[float] = Field(None, ge=20, le=600, description="Blood sugar in mg/dL")
+    blood_pressure_systolic: int = Field(..., ge=70, le=250, description="Systolic BP in mmHg")
+    blood_pressure_diastolic: int = Field(..., ge=40, le=150, description="Diastolic BP in mmHg")
+
+
+class PatientRegistrationRequest(BaseModel):
+    """Request model for patient registration"""
+    # Patient details
+    full_name: str = Field(..., min_length=2, max_length=255)
+    age: int = Field(..., ge=0, le=150)
+    gender: str = Field(..., pattern="^(male|female|other)$")
+    contact_number: str = Field(..., min_length=10, max_length=20)
+    medical_condition: Optional[str] = Field(None, max_length=500)
+    
+    # Initial vitals
+    vitals: InitialVitals
+    
+    # Doctor assignment (default to Dr. Priya Sharma - doctor_id=1)
+    doctor_id: int = Field(default=1, description="ID of assigned doctor")
+    
+    # Emergency contact (optional)
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+
+
+class PatientRegistrationResponse(BaseModel):
+    """Response model for patient registration"""
+    success: bool
+    message: str
+    patient_id: int
+    user_id: int
+    risk_level: str
+    risk_color: str
+    patient_name: str
+    assigned_doctor: str
+
+
+def calculate_risk_level(vitals: InitialVitals) -> tuple[RiskLevel, str]:
+    """
+    Calculate risk level based on vitals.
+    Returns tuple of (RiskLevel enum, color string)
+    
+    Risk Rules:
+    - Heart Rate > 120 or < 50 → HIGH (Red)
+    - Heart Rate 100-120 or 50-60 → MEDIUM (Yellow)
+    - SpO2 < 90 → HIGH (Red)
+    - SpO2 90-94 → MEDIUM (Yellow)
+    - Temperature > 39 → HIGH (Red)
+    - Temperature 37.5-39 → MEDIUM (Yellow)
+    - BP Systolic > 180 or < 90 → HIGH (Red)
+    - BP Systolic 140-180 or 90-100 → MEDIUM (Yellow)
+    - Blood Sugar > 200 or < 70 → HIGH (Red)
+    - Blood Sugar 140-200 → MEDIUM (Yellow)
+    """
+    risk_score = 0
+    
+    # Heart Rate assessment
+    if vitals.heart_rate > 120 or vitals.heart_rate < 50:
+        risk_score += 3
+    elif vitals.heart_rate > 100 or vitals.heart_rate < 60:
+        risk_score += 1
+    
+    # SpO2 assessment
+    if vitals.spo2 < 90:
+        risk_score += 3
+    elif vitals.spo2 < 94:
+        risk_score += 1
+    
+    # Temperature assessment
+    if vitals.temperature > 39:
+        risk_score += 3
+    elif vitals.temperature > 37.5:
+        risk_score += 1
+    
+    # Blood Pressure assessment
+    if vitals.blood_pressure_systolic > 180 or vitals.blood_pressure_systolic < 90:
+        risk_score += 3
+    elif vitals.blood_pressure_systolic > 140 or vitals.blood_pressure_systolic < 100:
+        risk_score += 1
+    
+    # Blood Sugar assessment (if provided)
+    if vitals.blood_sugar:
+        if vitals.blood_sugar > 200 or vitals.blood_sugar < 70:
+            risk_score += 3
+        elif vitals.blood_sugar > 140:
+            risk_score += 1
+    
+    # Determine final risk level
+    if risk_score >= 6:
+        return RiskLevel.HIGH, "red"
+    elif risk_score >= 2:
+        return RiskLevel.MEDIUM, "yellow"
+    else:
+        return RiskLevel.LOW, "green"
+
+
+@router.post("/admin/register-patient", response_model=PatientRegistrationResponse)
+async def register_patient(
+    registration: PatientRegistrationRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Admin/Receptionist endpoint to register a new patient.
+    
+    Creates:
+    1. User account for the patient
+    2. Patient profile with assigned doctor
+    3. Initial vital readings
+    4. Default alert thresholds
+    
+    Returns risk level based on initial vitals.
+    """
+    try:
+        # Calculate risk level from vitals
+        risk_level, risk_color = calculate_risk_level(registration.vitals)
+        
+        # Generate email from name (for demo purposes)
+        email_base = registration.full_name.lower().replace(" ", ".").replace("'", "")
+        email = f"{email_base}@patient.vitalguard.com"
+        
+        # Check if email already exists
+        existing_user = await db.execute(
+            select(User).where(User.email == email)
+        )
+        if existing_user.scalar_one_or_none():
+            # Add timestamp to make unique
+            import time
+            email = f"{email_base}.{int(time.time())}@patient.vitalguard.com"
+        
+        # Create user account
+        hashed_password = pwd_context.hash("patient123")  # Default password
+        new_user = User(
+            email=email,
+            hashed_password=hashed_password,
+            full_name=registration.full_name,
+            role=UserRole.PATIENT,
+            phone=registration.contact_number,
+            is_active=True
+        )
+        db.add(new_user)
+        await db.flush()  # Get user ID
+        
+        # Calculate date of birth from age
+        today = date.today()
+        birth_year = today.year - registration.age
+        date_of_birth = date(birth_year, 1, 1)  # Approximate DOB
+        
+        # Create patient profile
+        new_patient = Patient(
+            user_id=new_user.id,
+            date_of_birth=date_of_birth,
+            gender=registration.gender,
+            blood_type="O+",  # Default blood type (5 chars max)
+            emergency_contact_name=registration.emergency_contact_name or "Emergency Contact",
+            emergency_contact_phone=registration.emergency_contact_phone or registration.contact_number,
+            primary_doctor_id=registration.doctor_id,
+            condition_summary=registration.medical_condition or "Under observation",
+            risk_level=risk_level
+        )
+        db.add(new_patient)
+        await db.flush()  # Get patient ID
+        
+        # Create initial vital reading
+        initial_vitals = VitalReading(
+            patient_id=new_patient.id,
+            timestamp=datetime.utcnow(),
+            heart_rate=registration.vitals.heart_rate,
+            spo2=registration.vitals.spo2,
+            temperature=registration.vitals.temperature,
+            blood_pressure_systolic=registration.vitals.blood_pressure_systolic,
+            blood_pressure_diastolic=registration.vitals.blood_pressure_diastolic,
+            respiratory_rate=16.0,  # Default normal value
+            source="registration",
+            is_anomaly=risk_level == RiskLevel.HIGH
+        )
+        db.add(initial_vitals)
+        
+        # Create default alert thresholds
+        default_thresholds = [
+            AlertThreshold(
+                patient_id=new_patient.id,
+                vital_type="heart_rate",
+                min_warning=60, max_warning=100,
+                min_critical=50, max_critical=120
+            ),
+            AlertThreshold(
+                patient_id=new_patient.id,
+                vital_type="spo2",
+                min_warning=94, max_warning=100,
+                min_critical=90, max_critical=100
+            ),
+            AlertThreshold(
+                patient_id=new_patient.id,
+                vital_type="temperature",
+                min_warning=36.0, max_warning=37.5,
+                min_critical=35.0, max_critical=39.0
+            )
+        ]
+        for threshold in default_thresholds:
+            db.add(threshold)
+        
+        # Get assigned doctor name
+        doctor = await db.execute(
+            select(User).where(User.id == registration.doctor_id)
+        )
+        doctor_user = doctor.scalar_one_or_none()
+        doctor_name = doctor_user.full_name if doctor_user else "Dr. Priya Sharma"
+        
+        # Commit all changes
+        await db.commit()
+        
+        return PatientRegistrationResponse(
+            success=True,
+            message=f"Patient {registration.full_name} registered successfully",
+            patient_id=new_patient.id,
+            user_id=new_user.id,
+            risk_level=risk_level.value.upper(),
+            risk_color=risk_color,
+            patient_name=registration.full_name,
+            assigned_doctor=doctor_name
+        )
+        
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to register patient: {str(e)}"
+        )
+
+
+@router.get("/admin/doctors")
+async def get_available_doctors(db: AsyncSession = Depends(get_db)):
+    """Get list of available doctors for assignment"""
+    result = await db.execute(
+        select(User).where(User.role == UserRole.DOCTOR, User.is_active == True)
+    )
+    doctors = result.scalars().all()
+    
+    return [
+        {
+            "id": doc.id,
+            "name": doc.full_name,
+            "email": doc.email,
+            "phone": doc.phone
+        }
+        for doc in doctors
+    ]
+
+
+@router.get("/admin/recent-registrations")
+async def get_recent_registrations(
+    limit: int = Query(default=10, le=50),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get recently registered patients"""
+    result = await db.execute(
+        select(Patient)
+        .options(selectinload(Patient.user), selectinload(Patient.primary_doctor))
+        .order_by(desc(Patient.created_at))
+        .limit(limit)
+    )
+    patients = result.scalars().all()
+    
+    return [
+        {
+            "id": p.id,
+            "name": p.user.full_name,
+            "age": p.age,
+            "gender": p.gender,
+            "risk_level": p.risk_level.value if p.risk_level else "unknown",
+            "condition": p.condition_summary,
+            "doctor_name": p.primary_doctor.full_name if p.primary_doctor else "Not assigned",
+            "registered_at": p.created_at.isoformat()
+        }
+        for p in patients
+    ]
+

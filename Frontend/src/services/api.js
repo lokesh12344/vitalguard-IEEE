@@ -121,6 +121,22 @@ class ApiService {
       }),
     });
   }
+
+  // Admin/Receptionist endpoints
+  async registerPatient(patientData) {
+    return this.request('/admin/register-patient', {
+      method: 'POST',
+      body: JSON.stringify(patientData),
+    });
+  }
+
+  async getAdminDoctors() {
+    return this.request('/admin/doctors');
+  }
+
+  async getRecentRegistrations(limit = 10) {
+    return this.request(`/admin/recent-registrations?limit=${limit}`);
+  }
 }
 
 // Socket.IO connection for real-time updates

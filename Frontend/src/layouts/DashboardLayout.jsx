@@ -10,7 +10,8 @@ import {
   Menu,
   X,
   Sun,
-  Moon
+  Moon,
+  UserPlus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,6 +33,12 @@ const roleConfig = {
     icon: Heart,
     color: 'bg-purple-500',
     description: 'Monitor linked patients'
+  },
+  admin: {
+    label: 'Admin',
+    icon: UserPlus,
+    color: 'bg-orange-500',
+    description: 'Register new patients'
   }
 };
 
@@ -125,7 +132,8 @@ const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
                 <div className="hidden md:block">
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {currentRole === 'patient' ? 'Ramesh Gupta' : 
-                     currentRole === 'doctor' ? 'Dr. Priya Sharma' : 'Care Assistant'}
+                     currentRole === 'doctor' ? 'Dr. Priya Sharma' : 
+                     currentRole === 'admin' ? 'Receptionist' : 'Care Assistant'}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{roleConfig[currentRole].label} View</p>
                 </div>

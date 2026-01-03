@@ -31,6 +31,9 @@ import { cn, formatTimeAgo } from '@/lib/utils';
 // Current doctor ID - In a real app, this would come from auth context
 const CURRENT_DOCTOR_ID = 1;
 
+// Auto-refresh interval in milliseconds (10 seconds)
+const AUTO_REFRESH_INTERVAL = 10000;
+
 const DoctorDashboard = () => {
   const { patients, loading: patientsLoading, error: patientsError, refetch: refetchPatients } = usePatients('doctor', CURRENT_DOCTOR_ID);
   const { alerts, loading: alertsLoading, acknowledgeAlert, refetch: refetchAlerts } = useAlerts(24);
@@ -40,6 +43,18 @@ const DoctorDashboard = () => {
   const [patientAlerts, setPatientAlerts] = useState([]);
   const [vitalsHistory, setVitalsHistory] = useState([]);
   const [loadingPatientData, setLoadingPatientData] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+
+  // Auto-refresh patients list to show newly registered patients
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refetchPatients();
+      refetchAlerts();
+      setLastRefresh(new Date());
+    }, AUTO_REFRESH_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [refetchPatients, refetchAlerts]);
 
   // Calculate dashboard stats
   const dashboardStats = useMemo(() => {

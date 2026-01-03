@@ -4,6 +4,7 @@ import DashboardLayout from '@/layouts/DashboardLayout';
 import PatientDashboard from '@/pages/PatientDashboard';
 import DoctorDashboard from '@/pages/DoctorDashboard';
 import CaretakerDashboard from '@/pages/CaretakerDashboard';
+import AdminRegistration from '@/pages/AdminRegistration';
 
 function App() {
   const [currentRole, setCurrentRole] = useState('patient');
@@ -20,6 +21,8 @@ function App() {
         return <DoctorDashboard />;
       case 'caretaker':
         return <CaretakerDashboard />;
+      case 'admin':
+        return <AdminRegistration />;
       default:
         return <PatientDashboard />;
     }
