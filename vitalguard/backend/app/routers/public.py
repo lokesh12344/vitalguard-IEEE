@@ -19,7 +19,9 @@ from app.models.user import User, UserRole
 from app.models.patient import Patient, RiskLevel, AlertThreshold
 from app.models.vital import VitalReading
 from app.models.medication import Medication, MedicationLog, MedicationStatus
-from app.models.alert import Alert, AlertSeverity
+from app.models.alert import Alert, AlertSeverity, AlertType
+from app.socket_manager import socket_manager
+from app.services.alert import check_vital_and_create_alerts
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -90,6 +92,29 @@ class AlertResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class VitalSubmitRequest(BaseModel):
+    """Request model for submitting vitals from simulation."""
+    patient_id: int
+    heart_rate: Optional[float] = None
+    spo2: Optional[float] = None
+    temperature: Optional[float] = None
+    blood_pressure_systolic: Optional[int] = None
+    blood_pressure_diastolic: Optional[int] = None
+    respiratory_rate: Optional[float] = None
+    source: str = "SIMULATION"
+
+
+class VitalSubmitResponse(BaseModel):
+    """Response model for vital submission."""
+    id: int
+    patient_id: int
+    timestamp: datetime
+    is_anomaly: bool
+    alerts_created: int
+    risk_level: str
+    message: str
 
 
 class PatientDashboardResponse(BaseModel):
@@ -440,6 +465,117 @@ async def get_patient_dashboard(patient_id: int, db: AsyncSession = Depends(get_
         vitals=vitals,
         medications=medications,
         alerts=alerts,
+    )
+
+
+@router.post("/patients/{patient_id}/vitals/submit", response_model=VitalSubmitResponse)
+async def submit_vital_reading(
+    patient_id: int,
+    vital_data: VitalSubmitRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Submit a vital reading from the simulation/demo mode.
+    This creates a real database entry and triggers alerts if thresholds are breached.
+    Used by the Patient Dashboard simulation mode.
+    """
+    # Get patient with user relationship eagerly loaded
+    result = await db.execute(
+        select(Patient).options(selectinload(Patient.user)).where(Patient.id == patient_id)
+    )
+    patient = result.scalar_one_or_none()
+    
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Create vital reading
+    vital = VitalReading(
+        patient_id=patient_id,
+        heart_rate=vital_data.heart_rate,
+        spo2=vital_data.spo2,
+        temperature=vital_data.temperature,
+        blood_pressure_systolic=vital_data.blood_pressure_systolic,
+        blood_pressure_diastolic=vital_data.blood_pressure_diastolic,
+        respiratory_rate=vital_data.respiratory_rate or 16,
+        source=vital_data.source,
+        device_id=f"SIMULATION-{patient_id}",
+        timestamp=datetime.utcnow()
+    )
+    db.add(vital)
+    await db.flush()
+    
+    # Check thresholds and create alerts
+    alerts_created = await check_vital_and_create_alerts(db, vital, patient, socket_manager)
+    
+    if alerts_created:
+        vital.is_anomaly = True
+        
+        # Determine new risk level based on alert severity
+        has_critical = any(a.severity == AlertSeverity.CRITICAL for a in alerts_created)
+        has_warning = any(a.severity == AlertSeverity.WARNING for a in alerts_created)
+        
+        if has_critical:
+            patient.risk_level = RiskLevel.HIGH
+        elif has_warning and patient.risk_level == RiskLevel.LOW:
+            patient.risk_level = RiskLevel.MEDIUM
+    else:
+        # Vitals are normal - immediately lower risk level
+        # Simple logic: normal vitals = low risk
+        vital.is_anomaly = False
+        patient.risk_level = RiskLevel.LOW
+    
+    await db.commit()
+    await db.refresh(vital)
+    
+    # Emit real-time update to all connected clients
+    vital_update_data = {
+        "patient_id": patient_id,
+        "id": vital.id,
+        "timestamp": vital.timestamp.isoformat(),
+        "heart_rate": vital.heart_rate,
+        "spo2": vital.spo2,
+        "temperature": vital.temperature,
+        "blood_pressure_systolic": vital.blood_pressure_systolic,
+        "blood_pressure_diastolic": vital.blood_pressure_diastolic,
+        "respiratory_rate": vital.respiratory_rate,
+        "is_anomaly": vital.is_anomaly,
+        "source": vital.source
+    }
+    await socket_manager.emit_vital_update(patient_id, vital_update_data)
+    
+    # If alerts were created, emit them
+    patient_name = patient.user.full_name if patient.user else f"Patient {patient_id}"
+    for alert in (alerts_created or []):
+        alert_data = {
+            "id": alert.id,
+            "patient_id": patient_id,
+            "patient_name": patient_name,
+            "alert_type": alert.alert_type.value,
+            "message": alert.message,
+            "severity": alert.severity.value,
+            "created_at": alert.created_at.isoformat() if alert.created_at else datetime.utcnow().isoformat(),
+            "is_acknowledged": alert.is_acknowledged,
+            "vitals": {
+                "heart_rate": vital.heart_rate,
+                "spo2": vital.spo2,
+                "temperature": vital.temperature,
+                "blood_pressure": f"{vital.blood_pressure_systolic}/{vital.blood_pressure_diastolic}"
+            }
+        }
+        await socket_manager.emit_alert(patient_id, alert_data)
+        
+        # If patient is now HIGH risk, emit special high_risk alert
+        if patient.risk_level == RiskLevel.HIGH and alert.severity == AlertSeverity.CRITICAL:
+            await socket_manager.emit_high_risk_alert(patient_id, patient_name, alert_data)
+    
+    return VitalSubmitResponse(
+        id=vital.id,
+        patient_id=patient_id,
+        timestamp=vital.timestamp,
+        is_anomaly=vital.is_anomaly or False,
+        alerts_created=len(alerts_created) if alerts_created else 0,
+        risk_level=patient.risk_level.value,
+        message=f"Vital reading saved. {len(alerts_created) if alerts_created else 0} alert(s) created."
     )
 
 

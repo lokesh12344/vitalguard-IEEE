@@ -62,7 +62,7 @@ class Alert(Base):
             "threshold_breached": self.threshold_breached,
             "is_acknowledged": self.is_acknowledged,
             "acknowledged_at": self.acknowledged_at.isoformat() if self.acknowledged_at else None,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else datetime.utcnow().isoformat(),
         }
 
 

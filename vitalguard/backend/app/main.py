@@ -58,13 +58,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
+# CORS middleware - must be added BEFORE Socket.IO wrapping
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, specify exact origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers
@@ -91,8 +92,12 @@ async def root():
     }
 
 
-# Mount Socket.IO
-socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
+# Mount Socket.IO with CORS support
+socket_app = socketio.ASGIApp(
+    sio, 
+    other_asgi_app=app,
+    socketio_path="/socket.io"
+)
 
 # For running with uvicorn directly
 app = socket_app

@@ -109,6 +109,23 @@ class ApiService {
     return this.request(`/caretakers/${caretakerId}/patients`);
   }
 
+  // Submit vitals from simulation (saves to database)
+  async submitVitals(patientId, vitals) {
+    return this.request(`/patients/${patientId}/vitals/submit`, {
+      method: 'POST',
+      body: JSON.stringify({
+        patient_id: patientId,
+        heart_rate: vitals.heartRate,
+        spo2: vitals.spO2,
+        temperature: vitals.temperature,
+        blood_pressure_systolic: vitals.systolic,
+        blood_pressure_diastolic: vitals.diastolic,
+        respiratory_rate: vitals.respiratoryRate || 16,
+        source: 'SIMULATION'
+      }),
+    });
+  }
+
   // SOS Emergency endpoint
   async triggerSOS(patientId, location = null, message = null) {
     console.log('🆘 API triggerSOS called:', { patientId, location, message });
@@ -138,6 +155,141 @@ class ApiService {
     return this.request(`/admin/recent-registrations?limit=${limit}`);
   }
 }
+
+// Global Alert Notification Service for real-time cross-dashboard communication
+class AlertNotificationService {
+  constructor() {
+    this.listeners = new Map();
+    this.alerts = [];
+    this.maxAlerts = 50;
+  }
+
+  // Subscribe to high risk alerts
+  onHighRiskAlert(callback) {
+    if (!this.listeners.has('highRisk')) {
+      this.listeners.set('highRisk', new Set());
+    }
+    this.listeners.get('highRisk').add(callback);
+    return () => this.listeners.get('highRisk').delete(callback);
+  }
+
+  // Subscribe to any alert
+  onAlert(callback) {
+    if (!this.listeners.has('alert')) {
+      this.listeners.set('alert', new Set());
+    }
+    this.listeners.get('alert').add(callback);
+    return () => this.listeners.get('alert').delete(callback);
+  }
+
+  // Emit a high risk alert (called from PatientDashboard simulation)
+  emitHighRiskAlert(alert) {
+    const alertWithTimestamp = {
+      ...alert,
+      id: Date.now(),
+      timestamp: new Date().toISOString(),
+      type: 'high_risk',
+      acknowledged: false
+    };
+    
+    this.alerts.unshift(alertWithTimestamp);
+    if (this.alerts.length > this.maxAlerts) {
+      this.alerts = this.alerts.slice(0, this.maxAlerts);
+    }
+
+    // Notify all high risk listeners
+    if (this.listeners.has('highRisk')) {
+      this.listeners.get('highRisk').forEach(callback => callback(alertWithTimestamp));
+    }
+    
+    // Notify all general alert listeners
+    if (this.listeners.has('alert')) {
+      this.listeners.get('alert').forEach(callback => callback(alertWithTimestamp));
+    }
+
+    // Play notification sound
+    this.playAlertSound();
+
+    return alertWithTimestamp;
+  }
+
+  // Emit a general alert
+  emitAlert(alert) {
+    const alertWithTimestamp = {
+      ...alert,
+      id: Date.now(),
+      timestamp: new Date().toISOString(),
+      acknowledged: false
+    };
+    
+    this.alerts.unshift(alertWithTimestamp);
+    if (this.alerts.length > this.maxAlerts) {
+      this.alerts = this.alerts.slice(0, this.maxAlerts);
+    }
+
+    if (this.listeners.has('alert')) {
+      this.listeners.get('alert').forEach(callback => callback(alertWithTimestamp));
+    }
+
+    return alertWithTimestamp;
+  }
+
+  // Get all recent alerts
+  getAlerts() {
+    return this.alerts;
+  }
+
+  // Acknowledge an alert
+  acknowledgeAlert(alertId) {
+    const alert = this.alerts.find(a => a.id === alertId);
+    if (alert) {
+      alert.acknowledged = true;
+    }
+  }
+
+  // Clear all alerts
+  clearAlerts() {
+    this.alerts = [];
+  }
+
+  // Play alert sound
+  playAlertSound() {
+    try {
+      // Create a simple beep sound using Web Audio API
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      gainNode.gain.value = 0.3;
+      
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.2);
+      
+      // Second beep
+      setTimeout(() => {
+        const osc2 = audioContext.createOscillator();
+        const gain2 = audioContext.createGain();
+        osc2.connect(gain2);
+        gain2.connect(audioContext.destination);
+        osc2.frequency.value = 1000;
+        osc2.type = 'sine';
+        gain2.gain.value = 0.3;
+        osc2.start();
+        osc2.stop(audioContext.currentTime + 0.2);
+      }, 250);
+    } catch (e) {
+      console.log('Audio notification not available');
+    }
+  }
+}
+
+// Export singleton instance
+export const alertNotifications = new AlertNotificationService();
 
 // Socket.IO connection for real-time updates
 class WebSocketService {
@@ -190,7 +342,15 @@ class WebSocketService {
         });
 
         this.socket.on('alert:new', (data) => {
+          console.log('📢 Alert received:', data);
           this.emit('alert:new', data);
+        });
+
+        this.socket.on('alert:high_risk', (data) => {
+          console.log('🚨 HIGH RISK Alert received:', data);
+          this.emit('alert:high_risk', data);
+          // Also emit to in-memory notification service
+          alertNotifications.emitHighRiskAlert(data);
         });
 
         this.socket.on('alert:acknowledged', (data) => {
@@ -206,19 +366,20 @@ class WebSocketService {
 
   subscribeToPatient(patientId) {
     if (this.socket && this.connected) {
-      this.socket.emit('subscribe:patient', { patient_id: patientId });
+      this.socket.emit('subscribe_patient', { patient_id: patientId });
     }
   }
 
   unsubscribeFromPatient(patientId) {
     if (this.socket && this.connected) {
-      this.socket.emit('unsubscribe:patient', { patient_id: patientId });
+      this.socket.emit('unsubscribe_patient', { patient_id: patientId });
     }
   }
 
   subscribeToAlerts() {
     if (this.socket && this.connected) {
-      this.socket.emit('subscribe:alerts');
+      this.socket.emit('subscribe_alerts', {});
+      console.log('📢 Subscribed to alerts room');
     }
   }
 

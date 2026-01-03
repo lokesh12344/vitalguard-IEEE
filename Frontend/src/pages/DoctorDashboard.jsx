@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePatients, useAlerts, useVitalsHistory } from '@/hooks/useVitalGuard';
-import { api } from '@/services/api';
+import { api, alertNotifications, websocket } from '@/services/api';
 import { 
   Users, 
   AlertTriangle, 
@@ -24,7 +24,10 @@ import {
   TrendingUp,
   Loader2,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Bell,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { cn, formatTimeAgo } from '@/lib/utils';
 
@@ -44,6 +47,107 @@ const DoctorDashboard = () => {
   const [vitalsHistory, setVitalsHistory] = useState([]);
   const [loadingPatientData, setLoadingPatientData] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  
+  // Real-time alert notifications state
+  const [realtimeAlerts, setRealtimeAlerts] = useState([]);
+  const [showAlertPopup, setShowAlertPopup] = useState(false);
+  const [latestAlert, setLatestAlert] = useState(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // Subscribe to real-time high risk alerts via WebSocket
+  useEffect(() => {
+    // Connect to WebSocket and subscribe to alerts
+    const setupWebSocket = async () => {
+      try {
+        await websocket.connect();
+        websocket.subscribeToAlerts();
+        console.log('✅ WebSocket connected and subscribed to alerts');
+        
+        // Listen for regular alerts from WebSocket
+        const handleWebSocketAlert = (alert) => {
+          console.log('📢 WebSocket Alert Received:', alert);
+          const formattedAlert = {
+            ...alert,
+            id: alert.id || Date.now(),
+            timestamp: alert.created_at || new Date().toISOString(),
+            type: alert.severity === 'critical' ? 'high_risk' : 'warning',
+            acknowledged: alert.is_acknowledged || false
+          };
+          setRealtimeAlerts(prev => [formattedAlert, ...prev].slice(0, 20));
+          
+          // Refresh data
+          refetchPatients();
+          refetchAlerts();
+        };
+        
+        // Listen for HIGH RISK alerts specifically
+        const handleHighRiskAlert = (alert) => {
+          console.log('🚨🚨🚨 HIGH RISK ALERT:', alert);
+          const formattedAlert = {
+            ...alert,
+            id: alert.id || Date.now(),
+            timestamp: alert.created_at || new Date().toISOString(),
+            type: 'high_risk',
+            acknowledged: false
+          };
+          setRealtimeAlerts(prev => [formattedAlert, ...prev].slice(0, 20));
+          setLatestAlert(formattedAlert);
+          setShowAlertPopup(true);
+          
+          // Play alert sound for high risk
+          if (soundEnabled) {
+            alertNotifications.playAlertSound();
+          }
+          
+          // Refresh data immediately
+          refetchPatients();
+          refetchAlerts();
+          
+          // Auto-hide popup after 15 seconds
+          setTimeout(() => {
+            setShowAlertPopup(false);
+          }, 15000);
+        };
+        
+        websocket.on('alert:new', handleWebSocketAlert);
+        websocket.on('alert:high_risk', handleHighRiskAlert);
+        
+        return () => {
+          websocket.off('alert:new', handleWebSocketAlert);
+          websocket.off('alert:high_risk', handleHighRiskAlert);
+        };
+      } catch (err) {
+        console.log('WebSocket connection failed, using fallback:', err);
+      }
+    };
+    
+    setupWebSocket();
+    
+    // Also keep in-memory alerts as fallback
+    const unsubscribe = alertNotifications.onHighRiskAlert((alert) => {
+      console.log('🚨 In-Memory Alert Received:', alert);
+      setRealtimeAlerts(prev => [alert, ...prev].slice(0, 20));
+      setLatestAlert(alert);
+      setShowAlertPopup(true);
+      
+      // Auto-hide popup after 10 seconds
+      setTimeout(() => {
+        setShowAlertPopup(false);
+      }, 10000);
+    });
+
+    // Also subscribe to general alerts
+    const unsubscribeGeneral = alertNotifications.onAlert((alert) => {
+      if (alert.type !== 'high_risk') {
+        setRealtimeAlerts(prev => [alert, ...prev].slice(0, 20));
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeGeneral();
+    };
+  }, []);
 
   // Auto-refresh patients list to show newly registered patients
   useEffect(() => {
@@ -202,6 +306,118 @@ const DoctorDashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Real-time Alert Popup */}
+      {showAlertPopup && latestAlert && (
+        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 fade-in duration-300">
+          <Card className="w-96 border-red-500 bg-red-50 dark:bg-red-950 shadow-2xl">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
+                    <AlertTriangle className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-red-700 dark:text-red-300 text-lg">
+                      🚨 High Risk Alert
+                    </CardTitle>
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      {new Date(latestAlert.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6 text-red-500 hover:bg-red-100 dark:hover:bg-red-900"
+                  onClick={() => setShowAlertPopup(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-2">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Badge variant="danger" className="text-sm">
+                    Patient: {latestAlert.patientName}
+                  </Badge>
+                  <Badge variant="outline" className="border-red-500 text-red-600 dark:text-red-400">
+                    Risk Score: {latestAlert.riskScore}
+                  </Badge>
+                </div>
+                
+                <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                  {latestAlert.message}
+                </p>
+                
+                {latestAlert.vitals && (
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-red-100 dark:bg-red-900/50 rounded-lg p-2">
+                    <div className="flex justify-between">
+                      <span className="text-red-600 dark:text-red-400">Heart Rate:</span>
+                      <span className="font-bold text-red-700 dark:text-red-300">{latestAlert.vitals.heartRate} bpm</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-red-600 dark:text-red-400">SpO₂:</span>
+                      <span className="font-bold text-red-700 dark:text-red-300">{latestAlert.vitals.spO2}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-red-600 dark:text-red-400">Temp:</span>
+                      <span className="font-bold text-red-700 dark:text-red-300">{latestAlert.vitals.temperature}°C</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-red-600 dark:text-red-400">BP:</span>
+                      <span className="font-bold text-red-700 dark:text-red-300">{latestAlert.vitals.bloodPressure}</span>
+                    </div>
+                  </div>
+                )}
+
+                {latestAlert.factors && latestAlert.factors.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-red-600 dark:text-red-400">Risk Factors:</p>
+                    <ul className="text-xs text-red-700 dark:text-red-300 space-y-1">
+                      {latestAlert.factors.map((factor, idx) => (
+                        <li key={idx} className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+                          {factor}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <Button 
+                    size="sm" 
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                    onClick={() => {
+                      // Find and select the patient
+                      const patient = patientsByRisk.find(p => p.id === latestAlert.patientId);
+                      if (patient) {
+                        setSelectedPatient(patient);
+                      }
+                      setShowAlertPopup(false);
+                    }}
+                  >
+                    View Patient
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="border-red-500 text-red-600 hover:bg-red-100 dark:hover:bg-red-900"
+                    onClick={() => {
+                      alertNotifications.acknowledgeAlert(latestAlert.id);
+                      setShowAlertPopup(false);
+                    }}
+                  >
+                    Acknowledge
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -211,6 +427,26 @@ const DoctorDashboard = () => {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          {/* Real-time alerts indicator */}
+          {realtimeAlerts.length > 0 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="relative border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+              onClick={() => {
+                if (realtimeAlerts.length > 0) {
+                  setLatestAlert(realtimeAlerts[0]);
+                  setShowAlertPopup(true);
+                }
+              }}
+            >
+              <Bell className="h-4 w-4 mr-2" />
+              Alerts
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                {realtimeAlerts.filter(a => !a.acknowledged).length}
+              </span>
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
@@ -234,8 +470,75 @@ const DoctorDashboard = () => {
           <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
         </span>
         <span className="text-green-600 dark:text-green-400">Live monitoring active</span>
-        <span className="text-gray-400">• Real-time updates enabled</span>
+        <span className="text-gray-400">• Real-time alerts enabled</span>
+        {realtimeAlerts.length > 0 && (
+          <Badge variant="outline" className="ml-2 border-orange-500 text-orange-600 dark:text-orange-400">
+            {realtimeAlerts.length} recent alert{realtimeAlerts.length !== 1 ? 's' : ''}
+          </Badge>
+        )}
       </div>
+
+      {/* Recent Alerts Banner (if any) */}
+      {realtimeAlerts.length > 0 && (
+        <Card className="border-orange-300 bg-orange-50 dark:bg-orange-950/30 dark:border-orange-800">
+          <CardHeader className="py-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold text-orange-700 dark:text-orange-300 flex items-center gap-2">
+                <Bell className="h-5 w-5" />
+                Recent Real-time Alerts
+              </CardTitle>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-orange-600 hover:text-orange-700 hover:bg-orange-100 dark:hover:bg-orange-900"
+                onClick={() => setRealtimeAlerts([])}
+              >
+                Clear All
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {realtimeAlerts.slice(0, 5).map((alert) => (
+                <div 
+                  key={alert.id} 
+                  className={cn(
+                    "flex items-center justify-between p-2 rounded-lg border transition-all cursor-pointer hover:shadow-md",
+                    alert.type === 'high_risk' 
+                      ? "bg-red-100 border-red-300 dark:bg-red-900/30 dark:border-red-700" 
+                      : "bg-yellow-100 border-yellow-300 dark:bg-yellow-900/30 dark:border-yellow-700"
+                  )}
+                  onClick={() => {
+                    setLatestAlert(alert);
+                    setShowAlertPopup(true);
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className={cn(
+                      "h-4 w-4",
+                      alert.type === 'high_risk' ? "text-red-500" : "text-yellow-500"
+                    )} />
+                    <div>
+                      <p className={cn(
+                        "text-sm font-medium",
+                        alert.type === 'high_risk' ? "text-red-700 dark:text-red-300" : "text-yellow-700 dark:text-yellow-300"
+                      )}>
+                        {alert.patientName} - {alert.type === 'high_risk' ? 'High Risk' : 'Warning'}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {new Date(alert.timestamp).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant={alert.type === 'high_risk' ? 'danger' : 'warning'}>
+                    Score: {alert.riskScore}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

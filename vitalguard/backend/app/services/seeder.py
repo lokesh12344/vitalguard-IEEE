@@ -66,6 +66,12 @@ CARETAKERS = [
         "phone": "+91-9876543222",
         "password": "care123",
     },
+    {
+        "email": "advait.daware@vitalguard.com",
+        "full_name": "Advait Daware",
+        "phone": "+91-9702108687",
+        "password": "care123",
+    },
 ]
 
 # Seed data for patients
@@ -79,9 +85,10 @@ PATIENTS = [
         "gender": "Male",
         "blood_type": "A+",
         "condition_summary": "Hypertension, Type 2 Diabetes",
-        "emergency_contact_name": "Suresh Gupta",
-        "emergency_contact_phone": "+91-9876543240",
+        "emergency_contact_name": "Advait Daware (Grandchild)",
+        "emergency_contact_phone": "+91-9702108687",
         "risk_level": RiskLevel.MEDIUM,
+        "caretaker_index": 3,  # Advait Daware
     },
     {
         "email": "patient2@vitalguard.com",
@@ -236,6 +243,8 @@ async def seed_users(db: AsyncSession) -> dict:
         await db.flush()
         
         # Create patient profile
+        # Use custom caretaker_index if specified, otherwise use round-robin
+        caretaker_idx = patient_data.get("caretaker_index", i % len(users["caretakers"]))
         patient = Patient(
             user_id=user.id,
             date_of_birth=patient_data["date_of_birth"],
@@ -246,7 +255,7 @@ async def seed_users(db: AsyncSession) -> dict:
             emergency_contact_phone=patient_data["emergency_contact_phone"],
             risk_level=patient_data["risk_level"],
             primary_doctor_id=users["doctors"][i % len(users["doctors"])].id,
-            caregiver_id=users["caretakers"][i % len(users["caretakers"])].id,
+            caregiver_id=users["caretakers"][caretaker_idx].id,
         )
         db.add(patient)
         await db.flush()

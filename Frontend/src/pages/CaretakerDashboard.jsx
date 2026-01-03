@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { usePatients, useAlerts } from '@/hooks/useVitalGuard';
-import { api } from '@/services/api';
+import { api, alertNotifications } from '@/services/api';
 import { 
   Heart, 
   Phone, 
@@ -32,12 +32,14 @@ import {
   MessageCircle,
   Loader2,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { cn, formatTimeAgo } from '@/lib/utils';
 
 // Current caretaker ID - In a real app, this would come from auth context
-const CURRENT_CARETAKER_ID = 1;
+// Using Advait Daware's ID for demo purposes
+const CURRENT_CARETAKER_ID = 27;
 
 const CaretakerDashboard = () => {
   const { patients: linkedPatients, loading, error, refetch } = usePatients('caretaker', CURRENT_CARETAKER_ID);
@@ -46,6 +48,28 @@ const CaretakerDashboard = () => {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [callType, setCallType] = useState(null);
+  
+  // Real-time alert notifications state
+  const [realtimeAlerts, setRealtimeAlerts] = useState([]);
+  const [showAlertPopup, setShowAlertPopup] = useState(false);
+  const [latestAlert, setLatestAlert] = useState(null);
+
+  // Subscribe to real-time high risk alerts
+  useEffect(() => {
+    const unsubscribe = alertNotifications.onHighRiskAlert((alert) => {
+      console.log('🚨 Caretaker - High Risk Alert:', alert);
+      setRealtimeAlerts(prev => [alert, ...prev].slice(0, 20));
+      setLatestAlert(alert);
+      setShowAlertPopup(true);
+      
+      // Auto-hide popup after 10 seconds
+      setTimeout(() => {
+        setShowAlertPopup(false);
+      }, 10000);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Set first patient as selected when data loads
   useEffect(() => {
@@ -179,6 +203,90 @@ const CaretakerDashboard = () => {
 
   return (
     <div className="space-y-6">
+      {/* Real-time Alert Popup */}
+      {showAlertPopup && latestAlert && (
+        <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2 fade-in duration-300">
+          <Card className="w-96 border-red-500 bg-red-50 dark:bg-red-950 shadow-2xl">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
+                    <AlertTriangle className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-red-700 dark:text-red-300 text-lg">
+                      🚨 Patient Alert
+                    </CardTitle>
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      {new Date(latestAlert.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6 text-red-500 hover:bg-red-100 dark:hover:bg-red-900"
+                  onClick={() => setShowAlertPopup(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-2">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Badge variant="danger" className="text-sm">
+                    {latestAlert.patientName}
+                  </Badge>
+                  <Badge variant="outline" className="border-red-500 text-red-600 dark:text-red-400">
+                    Risk: {latestAlert.riskScore}
+                  </Badge>
+                </div>
+                
+                <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                  {latestAlert.message}
+                </p>
+                
+                {latestAlert.vitals && (
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-red-100 dark:bg-red-900/50 rounded-lg p-2">
+                    <div className="flex justify-between">
+                      <span className="text-red-600 dark:text-red-400">Heart Rate:</span>
+                      <span className="font-bold text-red-700 dark:text-red-300">{latestAlert.vitals.heartRate} bpm</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-red-600 dark:text-red-400">SpO₂:</span>
+                      <span className="font-bold text-red-700 dark:text-red-300">{latestAlert.vitals.spO2}%</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <Button 
+                    size="sm" 
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                    onClick={() => {
+                      handleEmergencyCall('patient');
+                      setShowAlertPopup(false);
+                    }}
+                  >
+                    <Phone className="h-4 w-4 mr-1" />
+                    Call Patient
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="border-red-500 text-red-600 hover:bg-red-100 dark:hover:bg-red-900"
+                    onClick={() => setShowAlertPopup(false)}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -188,6 +296,26 @@ const CaretakerDashboard = () => {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          {/* Real-time alerts indicator */}
+          {realtimeAlerts.length > 0 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="relative border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+              onClick={() => {
+                if (realtimeAlerts.length > 0) {
+                  setLatestAlert(realtimeAlerts[0]);
+                  setShowAlertPopup(true);
+                }
+              }}
+            >
+              <Bell className="h-4 w-4 mr-2" />
+              Alerts
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                {realtimeAlerts.filter(a => !a.acknowledged).length}
+              </span>
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={refetch}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
@@ -317,34 +445,26 @@ const CaretakerDashboard = () => {
             <Card className="dark:bg-slate-800/50 dark:border-slate-700">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg dark:text-white">
-                  <Phone className="h-5 w-5 text-green-500" />
-                  Emergency Contacts
+                  <MessageCircle className="h-5 w-5 text-green-500" />
+                  Quick Messages
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Button 
-                  variant="danger" 
-                  className="w-full gap-2"
-                  onClick={() => handleEmergencyCall('emergency')}
-                >
-                  <AlertTriangle className="h-4 w-4" />
-                  Call Emergency (911)
-                </Button>
-                <Button 
                   variant="default" 
                   className="w-full gap-2"
-                  onClick={() => handleEmergencyCall('doctor')}
+                  onClick={() => handleEmergencyCall('patient')}
                 >
-                  <Phone className="h-4 w-4" />
-                  Call Doctor
+                  <MessageCircle className="h-4 w-4" />
+                  Message Patient
                 </Button>
                 <Button 
                   variant="outline" 
                   className="w-full gap-2"
-                  onClick={() => handleEmergencyCall('family')}
+                  onClick={() => handleEmergencyCall('doctor')}
                 >
                   <MessageCircle className="h-4 w-4" />
-                  Contact Family
+                  Message Doctor
                 </Button>
                 <div className="pt-2 border-t dark:border-slate-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Assigned Doctor:</p>

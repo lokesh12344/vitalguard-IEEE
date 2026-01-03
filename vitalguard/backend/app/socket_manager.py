@@ -69,6 +69,18 @@ class SocketManager:
         await self.sio.emit("alert:new", alert_data, room="alerts:all")
         logger.info(f"Emitted alert for patient {patient_id}")
     
+    async def emit_high_risk_alert(self, patient_id: int, patient_name: str, alert_data: dict):
+        """Emit high risk patient alert to all doctors."""
+        high_risk_data = {
+            **alert_data,
+            "patient_id": patient_id,
+            "patient_name": patient_name,
+            "is_high_risk": True,
+            "priority": "urgent"
+        }
+        await self.sio.emit("alert:high_risk", high_risk_data, room="alerts:all")
+        logger.warning(f"🚨 HIGH RISK ALERT: Patient {patient_name} (ID: {patient_id})")
+    
     async def emit_medication_reminder(self, patient_id: int, medication_data: dict):
         """Emit medication reminder."""
         room = f"patient:{patient_id}"
