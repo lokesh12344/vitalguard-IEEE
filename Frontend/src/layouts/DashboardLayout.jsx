@@ -124,8 +124,8 @@ const DashboardLayout = ({ children, currentRole, onRoleChange }) => {
                 </div>
                 <div className="hidden md:block">
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {currentRole === 'patient' ? 'John Smith' : 
-                     currentRole === 'doctor' ? 'Dr. Sarah Chen' : 'Care Assistant'}
+                    {currentRole === 'patient' ? 'Ramesh Gupta' : 
+                     currentRole === 'doctor' ? 'Dr. Priya Sharma' : 'Care Assistant'}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{roleConfig[currentRole].label} View</p>
                 </div>

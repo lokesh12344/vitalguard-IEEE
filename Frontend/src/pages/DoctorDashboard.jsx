@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PatientList from '@/components/PatientList';
 import VitalsCard from '@/components/VitalsCard';
 import VitalsChart from '@/components/VitalsChart';
@@ -7,7 +7,8 @@ import RiskBadge from '@/components/RiskBadge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { patientsByRisk, dashboardStats } from '@/mock/mockPatients';
+import { usePatients, useAlerts, useVitalsHistory } from '@/hooks/useVitalGuard';
+import { api } from '@/services/api';
 import { 
   Users, 
   AlertTriangle, 
@@ -20,12 +21,92 @@ import {
   MapPin,
   X,
   Pill,
-  TrendingUp
+  TrendingUp,
+  Loader2,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { cn, formatTimeAgo } from '@/lib/utils';
 
+// Current doctor ID - In a real app, this would come from auth context
+const CURRENT_DOCTOR_ID = 1;
+
 const DoctorDashboard = () => {
+  const { patients, loading: patientsLoading, error: patientsError, refetch: refetchPatients } = usePatients('doctor', CURRENT_DOCTOR_ID);
+  const { alerts, loading: alertsLoading, acknowledgeAlert, refetch: refetchAlerts } = useAlerts(24);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientVitals, setPatientVitals] = useState(null);
+  const [patientMedications, setPatientMedications] = useState([]);
+  const [patientAlerts, setPatientAlerts] = useState([]);
+  const [vitalsHistory, setVitalsHistory] = useState([]);
+  const [loadingPatientData, setLoadingPatientData] = useState(false);
+
+  // Calculate dashboard stats
+  const dashboardStats = useMemo(() => {
+    if (!patients || patients.length === 0) {
+      return {
+        totalPatients: 0,
+        highRiskCount: 0,
+        activeAlerts: 0,
+        averageAdherence: 0
+      };
+    }
+
+    return {
+      totalPatients: patients.length,
+      highRiskCount: patients.filter(p => p.risk_level === 'high' || p.risk_level === 'critical').length,
+      activeAlerts: alerts?.filter(a => a.active)?.length || 0,
+      averageAdherence: 85 // Would be calculated from medications data
+    };
+  }, [patients, alerts]);
+
+  // Transform patients for PatientList component
+  const patientsByRisk = useMemo(() => {
+    if (!patients) return [];
+    
+    return patients.map(p => ({
+      id: p.id,
+      name: p.name,
+      age: p.age,
+      avatar: p.avatar,
+      condition: p.condition,
+      riskLevel: p.risk_level,
+      riskScore: p.risk_level === 'critical' ? 90 : p.risk_level === 'high' ? 75 : p.risk_level === 'medium' ? 50 : 25,
+      lastUpdated: p.last_updated,
+      gender: 'Unknown',
+      emergencyContact: p.emergency_contact,
+      assignedDoctor: p.doctor_name,
+      caretaker: p.caretaker_name,
+    }));
+  }, [patients]);
+
+  // Fetch patient details when selected
+  useEffect(() => {
+    if (!selectedPatient) return;
+
+    const fetchPatientData = async () => {
+      setLoadingPatientData(true);
+      try {
+        const [vitals, meds, patientAlertsData, history] = await Promise.all([
+          api.getCurrentVitals(selectedPatient.id),
+          api.getMedications(selectedPatient.id),
+          api.getPatientAlerts(selectedPatient.id),
+          api.getVitalsHistory(selectedPatient.id, 24)
+        ]);
+        
+        setPatientVitals(vitals);
+        setPatientMedications(meds);
+        setPatientAlerts(patientAlertsData);
+        setVitalsHistory(history);
+      } catch (err) {
+        console.error('Error fetching patient data:', err);
+      } finally {
+        setLoadingPatientData(false);
+      }
+    };
+
+    fetchPatientData();
+  }, [selectedPatient?.id]);
 
   const handlePatientClick = (patient) => {
     setSelectedPatient(patient);
@@ -33,7 +114,76 @@ const DoctorDashboard = () => {
 
   const closePatientDetail = () => {
     setSelectedPatient(null);
+    setPatientVitals(null);
+    setPatientMedications([]);
+    setPatientAlerts([]);
+    setVitalsHistory([]);
   };
+
+  const handleRefresh = () => {
+    refetchPatients();
+    refetchAlerts();
+  };
+
+  // Chart data from history
+  const chartData = useMemo(() => {
+    if (!vitalsHistory || vitalsHistory.length === 0) {
+      return { heartRate: [], spO2: [] };
+    }
+
+    return {
+      heartRate: vitalsHistory.map(v => ({
+        label: new Date(v.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        value: v.heart_rate
+      })),
+      spO2: vitalsHistory.map(v => ({
+        label: new Date(v.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        value: v.spo2
+      })),
+      temperature: vitalsHistory.map(v => ({
+        label: new Date(v.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        value: v.temperature
+      })),
+      bloodPressure: {
+        systolic: vitalsHistory.map(v => ({
+          label: new Date(v.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          value: v.blood_pressure_systolic
+        })),
+        diastolic: vitalsHistory.map(v => ({
+          label: new Date(v.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          value: v.blood_pressure_diastolic
+        }))
+      }
+    };
+  }, [vitalsHistory]);
+
+  // Loading state
+  if (patientsLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (patientsError) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-500 mb-4">Failed to load patient data</p>
+          <Button onClick={refetchPatients} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -42,18 +192,34 @@ const DoctorDashboard = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Doctor Dashboard</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Welcome, Dr. Sarah Chen. You have {dashboardStats.totalPatients} patients under your care.
+            Welcome, Dr. Priya Sharma. You have {dashboardStats.totalPatients} patients under your care.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <Calendar className="h-4 w-4" />
-          {new Date().toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="sm" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <Calendar className="h-4 w-4" />
+            {new Date().toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })}
+          </div>
         </div>
+      </div>
+
+      {/* Live indicator */}
+      <div className="flex items-center gap-2 text-sm">
+        <span className="relative flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+        </span>
+        <span className="text-green-600 dark:text-green-400">Live monitoring active</span>
+        <span className="text-gray-400">• Real-time updates enabled</span>
       </div>
 
       {/* Stats Overview */}
@@ -127,21 +293,21 @@ const DoctorDashboard = () => {
         {/* Patient Detail View */}
         <div className="lg:col-span-2">
           {selectedPatient ? (
-            <Card className="h-full">
+            <Card className="h-full dark:bg-slate-800/50 dark:border-slate-700">
               <CardHeader className="border-b dark:border-slate-700">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4">
                     <div className={cn(
                       "w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg",
-                      selectedPatient.riskLevel === 'high' ? 'bg-red-500' :
+                      selectedPatient.riskLevel === 'high' || selectedPatient.riskLevel === 'critical' ? 'bg-red-500' :
                       selectedPatient.riskLevel === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
                     )}>
                       {selectedPatient.avatar}
                     </div>
                     <div>
-                      <CardTitle className="text-xl">{selectedPatient.name}</CardTitle>
+                      <CardTitle className="text-xl dark:text-white">{selectedPatient.name}</CardTitle>
                       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {selectedPatient.age} years old • {selectedPatient.gender} • ID: {selectedPatient.id}
+                        {selectedPatient.age} years old • ID: {selectedPatient.id}
                       </p>
                       <div className="flex items-center gap-2 mt-2">
                         <RiskBadge 
@@ -150,9 +316,9 @@ const DoctorDashboard = () => {
                           score={selectedPatient.riskScore}
                           size="lg"
                         />
-                        <Badge variant="outline" className="text-gray-500 dark:text-gray-400">
+                        <Badge variant="outline" className="text-gray-500 dark:text-gray-400 dark:border-slate-600">
                           <Clock className="h-3 w-3 mr-1" />
-                          Updated {formatTimeAgo(selectedPatient.lastUpdated)}
+                          Updated {selectedPatient.lastUpdated ? formatTimeAgo(selectedPatient.lastUpdated) : 'recently'}
                         </Badge>
                       </div>
                     </div>
@@ -162,147 +328,176 @@ const DoctorDashboard = () => {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="p-6 space-y-6 max-h-[calc(100vh-300px)] overflow-y-auto">
-                {/* Patient Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Condition</p>
-                    <p className="text-gray-900 dark:text-white">{selectedPatient.condition}</p>
+              <CardContent className="p-6 space-y-6 overflow-auto max-h-[calc(100vh-300px)]">
+                {loadingPatientData ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Caretaker</p>
-                    <p className="text-gray-900 dark:text-white">{selectedPatient.caretaker}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                      <Phone className="h-3 w-3" /> Emergency Contact
-                    </p>
-                    <p className="text-gray-900 dark:text-white">{selectedPatient.emergencyContact}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                      <MapPin className="h-3 w-3" /> Address
-                    </p>
-                    <p className="text-gray-900 dark:text-white">{selectedPatient.address}</p>
-                  </div>
-                </div>
-
-                {/* Current Vitals */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-blue-500" />
-                    Current Vitals
-                  </h3>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <VitalsCard
-                      title="Heart Rate"
-                      value={selectedPatient.vitals.current.heartRate.value}
-                      unit={selectedPatient.vitals.current.heartRate.unit}
-                      status={selectedPatient.vitals.current.heartRate.status}
-                      icon="heartRate"
-                      className="p-3"
-                    />
-                    <VitalsCard
-                      title="Temperature"
-                      value={selectedPatient.vitals.current.temperature.value}
-                      unit={selectedPatient.vitals.current.temperature.unit}
-                      status={selectedPatient.vitals.current.temperature.status}
-                      icon="temperature"
-                      className="p-3"
-                    />
-                    <VitalsCard
-                      title="SpO₂"
-                      value={selectedPatient.vitals.current.spO2.value}
-                      unit={selectedPatient.vitals.current.spO2.unit}
-                      status={selectedPatient.vitals.current.spO2.status}
-                      icon="spO2"
-                      className="p-3"
-                    />
-                    <VitalsCard
-                      title="Blood Pressure"
-                      value={`${selectedPatient.vitals.current.bloodPressure.systolic}/${selectedPatient.vitals.current.bloodPressure.diastolic}`}
-                      unit={selectedPatient.vitals.current.bloodPressure.unit}
-                      status="normal"
-                      icon="bloodPressure"
-                      className="p-3"
-                    />
-                  </div>
-                </div>
-
-                {/* Vitals Chart */}
-                <VitalsChart
-                  title="Heart Rate - 24 Hour Trend"
-                  data={selectedPatient.vitals.history.heartRate}
-                  dataLabel="BPM"
-                  color="#ef4444"
-                  height={200}
-                />
-
-                {/* Medications */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
-                    <Pill className="h-5 w-5 text-blue-500" />
-                    Medication Adherence
-                  </h3>
-                  <div className="space-y-2">
-                    {selectedPatient.medications.map((med, index) => (
-                      <div 
-                        key={index}
-                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-700"
-                      >
-                        <div>
-                          <p className="font-medium text-gray-800 dark:text-gray-200">{med.name}</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{med.dosage} • {med.schedule}</p>
+                ) : (
+                  <>
+                    {/* Patient Info */}
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                          <Activity className="h-4 w-4 text-gray-400" />
+                          <span className="font-medium dark:text-gray-400">Condition:</span>
+                          <span className="dark:text-gray-200">{selectedPatient.condition}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-24 bg-gray-200 dark:bg-slate-700 rounded-full h-2">
-                            <div 
-                              className={cn(
-                                "h-2 rounded-full",
-                                med.adherence >= 80 ? 'bg-green-500' : 
-                                med.adherence >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                              )}
-                              style={{ width: `${med.adherence}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-12">
-                            {med.adherence}%
-                          </span>
+                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                          <Users className="h-4 w-4 text-gray-400" />
+                          <span className="font-medium dark:text-gray-400">Caretaker:</span>
+                          <span className="dark:text-gray-200">{selectedPatient.caretaker || 'Not assigned'}</span>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                          <Phone className="h-4 w-4 text-gray-400" />
+                          <span className="font-medium dark:text-gray-400">Emergency:</span>
+                          <span className="dark:text-gray-200">{selectedPatient.emergencyContact || 'Not set'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                          <MapPin className="h-4 w-4 text-gray-400" />
+                          <span className="font-medium dark:text-gray-400">Location:</span>
+                          <span className="dark:text-gray-200">Home</span>
+                        </div>
+                      </div>
+                    </div>
 
-                {/* Active Alerts */}
-                {selectedPatient.alerts.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5 text-orange-500" />
-                      Alerts
-                    </h3>
-                    <AlertBanner 
-                      alerts={selectedPatient.alerts.map((a, i) => ({
-                        id: i,
-                        type: a.type,
-                        message: a.message,
-                        timestamp: new Date(Date.now() - Math.random() * 86400000).toISOString(),
-                        acknowledged: !a.active
-                      }))}
-                      compact
-                    />
-                  </div>
-                )}
+                    {/* Current Vitals */}
+                    {patientVitals && (
+                      <div>
+                        <h4 className="font-medium text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
+                          <Activity className="h-4 w-4 text-blue-500" />
+                          Current Vitals
+                        </h4>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                          <VitalsCard
+                            title="Heart Rate"
+                            value={patientVitals.heart_rate?.value || '--'}
+                            unit="bpm"
+                            status={patientVitals.heart_rate?.status || 'normal'}
+                            icon="heartRate"
+                            compact
+                          />
+                          <VitalsCard
+                            title="SpO₂"
+                            value={patientVitals.spo2?.value || '--'}
+                            unit="%"
+                            status={patientVitals.spo2?.status || 'normal'}
+                            icon="spO2"
+                            compact
+                          />
+                          <VitalsCard
+                            title="Temperature"
+                            value={patientVitals.temperature?.value || '--'}
+                            unit="°C"
+                            status={patientVitals.temperature?.status || 'normal'}
+                            icon="temperature"
+                            compact
+                          />
+                          <VitalsCard
+                            title="Blood Pressure"
+                            value={patientVitals.blood_pressure?.systolic && patientVitals.blood_pressure?.diastolic
+                              ? `${patientVitals.blood_pressure.systolic}/${patientVitals.blood_pressure.diastolic}`
+                              : '--'}
+                            unit="mmHg"
+                            status={patientVitals.blood_pressure?.status || 'normal'}
+                            icon="bloodPressure"
+                            compact
+                          />
+                        </div>
+                      </div>
+                    )}
 
-                {/* Notes */}
-                {selectedPatient.notes && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                    <h4 className="font-medium text-blue-800 dark:text-blue-300 flex items-center gap-2 mb-2">
-                      <FileText className="h-4 w-4" />
-                      Clinical Notes
-                    </h4>
-                    <p className="text-sm text-blue-700 dark:text-blue-200">{selectedPatient.notes}</p>
-                  </div>
+                    {/* Vitals Trend Charts */}
+                    {chartData.heartRate.length > 0 && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <VitalsChart
+                            title="Heart Rate (24h)"
+                            data={chartData.heartRate}
+                            dataLabel="BPM"
+                            color="#ef4444"
+                            height={180}
+                          />
+                          <VitalsChart
+                            title="Blood Oxygen SpO₂ (24h)"
+                            data={chartData.spO2}
+                            dataLabel="%"
+                            color="#3b82f6"
+                            height={180}
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <VitalsChart
+                            title="Temperature (24h)"
+                            data={chartData.temperature}
+                            dataLabel="°C"
+                            color="#f59e0b"
+                            height={180}
+                          />
+                          <VitalsChart
+                            title="Blood Pressure (24h)"
+                            data={chartData.bloodPressure.systolic}
+                            dataLabel="Systolic"
+                            color="#8b5cf6"
+                            height={180}
+                            showLegend={true}
+                            secondaryData={chartData.bloodPressure.diastolic}
+                            secondaryLabel="Diastolic"
+                            secondaryColor="#06b6d4"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Medications */}
+                    {patientMedications.length > 0 && (
+                      <div className="bg-gray-50 dark:bg-slate-800/50 border dark:border-slate-700 rounded-lg p-4">
+                        <h4 className="font-medium text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
+                          <Pill className="h-4 w-4 text-purple-500" />
+                          Medication Adherence
+                        </h4>
+                        <div className="space-y-2">
+                          {patientMedications.map((med, index) => (
+                            <div key={index} className="flex items-center justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-300">{med.name} ({med.dosage})</span>
+                              <Badge variant={med.adherence >= 80 ? 'success' : med.adherence >= 50 ? 'warning' : 'danger'}>
+                                {med.adherence}%
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Alerts */}
+                    {patientAlerts.length > 0 && (
+                      <AlertBanner
+                        alerts={patientAlerts.map(a => ({
+                          id: a.id,
+                          type: a.severity,
+                          message: a.message,
+                          timestamp: a.timestamp,
+                          acknowledged: !a.active
+                        }))}
+                        compact
+                      />
+                    )}
+
+                    {/* Notes */}
+                    {selectedPatient.condition && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                        <h4 className="font-medium text-blue-800 dark:text-blue-300 flex items-center gap-2 mb-2">
+                          <FileText className="h-4 w-4" />
+                          Clinical Notes
+                        </h4>
+                        <p className="text-sm text-blue-700 dark:text-blue-200">
+                          Patient condition: {selectedPatient.condition}. Regular monitoring required.
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>

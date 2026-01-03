@@ -116,11 +116,6 @@ const AlertBanner = ({
             })
           )}
         </div>
-        {alerts.length > maxDisplay && (
-          <Button variant="link" className="w-full mt-3">
-            View all {alerts.length} alerts
-          </Button>
-        )}
       </CardContent>
     </Card>
   );

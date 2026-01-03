@@ -54,37 +54,6 @@ services:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: vitalguard-frontend
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:8000
-      - VITE_WS_URL=ws://localhost:8000
-    depends_on:
-      - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: npm run dev -- --host
-
-  simulator:
-    build:
-      context: ./simulator
-      dockerfile: Dockerfile
-    container_name: vitalguard-simulator
-    environment:
-      - API_URL=http://backend:8000
-    depends_on:
-      - backend
-    volumes:
-      - ./simulator:/app
-    profiles:
-      - tools
-
 volumes:
   postgres_data:
   redis_data:

@@ -24,8 +24,13 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
-    patient_profile: Mapped["Patient"] = relationship("Patient", back_populates="user", uselist=False)
+    # Relationships - specify foreign_keys to avoid ambiguity
+    patient_profile: Mapped["Patient"] = relationship(
+        "Patient", 
+        foreign_keys="[Patient.user_id]",
+        back_populates="user", 
+        uselist=False
+    )
     
     def __repr__(self):
         return f"<User {self.email} ({self.role.value})>"

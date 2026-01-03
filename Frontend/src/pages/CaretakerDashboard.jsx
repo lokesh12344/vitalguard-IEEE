@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import VitalsCard from '@/components/VitalsCard';
+import VitalsChart from '@/components/VitalsChart';
 import AlertBanner from '@/components/AlertBanner';
 import RiskBadge from '@/components/RiskBadge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +15,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { getLinkedPatients } from '@/mock/mockPatients';
+import { usePatients, useAlerts } from '@/hooks/useVitalGuard';
+import { api } from '@/services/api';
 import { 
   Heart, 
   Phone, 
@@ -27,15 +29,91 @@ import {
   XCircle,
   Activity,
   Pill,
-  MessageCircle
+  MessageCircle,
+  Loader2,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { cn, formatTimeAgo } from '@/lib/utils';
 
+// Current caretaker ID - In a real app, this would come from auth context
+const CURRENT_CARETAKER_ID = 1;
+
 const CaretakerDashboard = () => {
-  const linkedPatients = getLinkedPatients();
-  const [selectedPatient, setSelectedPatient] = useState(linkedPatients[0]);
+  const { patients: linkedPatients, loading, error, refetch } = usePatients('caretaker', CURRENT_CARETAKER_ID);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientDetails, setPatientDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [callType, setCallType] = useState(null);
+
+  // Set first patient as selected when data loads
+  useEffect(() => {
+    if (linkedPatients && linkedPatients.length > 0 && !selectedPatient) {
+      setSelectedPatient(linkedPatients[0]);
+    }
+  }, [linkedPatients, selectedPatient]);
+
+  // Fetch patient details when selected
+  useEffect(() => {
+    if (!selectedPatient) return;
+
+    const fetchDetails = async () => {
+      setLoadingDetails(true);
+      try {
+        const [vitals, medications, alerts, history] = await Promise.all([
+          api.getCurrentVitals(selectedPatient.id),
+          api.getMedications(selectedPatient.id),
+          api.getPatientAlerts(selectedPatient.id),
+          api.getVitalsHistory(selectedPatient.id, 24)
+        ]);
+        setPatientDetails({
+          vitals,
+          medications,
+          alerts,
+          history
+        });
+      } catch (err) {
+        console.error('Error fetching patient details:', err);
+      } finally {
+        setLoadingDetails(false);
+      }
+    };
+
+    fetchDetails();
+  }, [selectedPatient?.id]);
+
+  // Chart data for selected patient
+  const chartData = useMemo(() => {
+    if (!patientDetails?.history || patientDetails.history.length === 0) {
+      return { heartRate: [], spO2: [], temperature: [], bloodPressure: { systolic: [], diastolic: [] } };
+    }
+
+    return {
+      heartRate: patientDetails.history.map(v => ({
+        label: new Date(v.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        value: v.heart_rate
+      })),
+      spO2: patientDetails.history.map(v => ({
+        label: new Date(v.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        value: v.spo2
+      })),
+      temperature: patientDetails.history.map(v => ({
+        label: new Date(v.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        value: v.temperature
+      })),
+      bloodPressure: {
+        systolic: patientDetails.history.map(v => ({
+          label: new Date(v.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          value: v.blood_pressure_systolic
+        })),
+        diastolic: patientDetails.history.map(v => ({
+          label: new Date(v.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          value: v.blood_pressure_diastolic
+        }))
+      }
+    };
+  }, [patientDetails?.history]);
 
   const handleEmergencyCall = (type) => {
     setCallType(type);
@@ -43,24 +121,61 @@ const CaretakerDashboard = () => {
   };
 
   // Calculate daily summary for selected patient
-  const getDailySummary = (patient) => {
-    const takenMeds = patient.medications.filter(m => m.adherence >= 80).length;
-    const totalMeds = patient.medications.length;
-    const activeAlerts = patient.alerts.filter(a => a.active).length;
-    const resolvedAlerts = patient.alerts.filter(a => !a.active).length;
+  const summary = useMemo(() => {
+    if (!patientDetails) {
+      return {
+        medicationsTaken: 0,
+        medicationsTotal: 0,
+        activeAlerts: 0,
+        resolvedAlerts: 0,
+        avgAdherence: 0
+      };
+    }
+
+    const { medications, alerts } = patientDetails;
+    const takenMeds = medications.filter(m => m.adherence >= 80).length;
+    const totalMeds = medications.length;
+    const activeAlerts = alerts.filter(a => a.active).length;
+    const resolvedAlerts = alerts.filter(a => !a.active).length;
     
     return {
       medicationsTaken: takenMeds,
       medicationsTotal: totalMeds,
       activeAlerts,
       resolvedAlerts,
-      avgAdherence: Math.round(
-        patient.medications.reduce((sum, m) => sum + m.adherence, 0) / totalMeds
-      )
+      avgAdherence: totalMeds > 0 
+        ? Math.round(medications.reduce((sum, m) => sum + m.adherence, 0) / totalMeds)
+        : 0
     };
-  };
+  }, [patientDetails]);
 
-  const summary = getDailySummary(selectedPatient);
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-purple-500 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-500 mb-4">Failed to load patient data</p>
+          <Button onClick={refetch} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -72,25 +187,41 @@ const CaretakerDashboard = () => {
             Monitor and care for your linked patients
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <Calendar className="h-4 w-4" />
-          {new Date().toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="sm" onClick={refetch}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <Calendar className="h-4 w-4" />
+            {new Date().toLocaleDateString('en-US', { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })}
+          </div>
         </div>
+      </div>
+
+      {/* Live indicator */}
+      <div className="flex items-center gap-2 text-sm">
+        <span className="relative flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+        </span>
+        <span className="text-green-600 dark:text-green-400">Live monitoring active</span>
+        <span className="text-gray-400">• Real-time updates enabled</span>
       </div>
 
       {/* Linked Patients Selector */}
       <div>
         <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
           <User className="h-5 w-5 text-purple-500" />
-          Linked Patients
+          Linked Patients ({linkedPatients?.length || 0})
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {linkedPatients.map((patient) => (
+          {linkedPatients?.map((patient) => (
             <Card 
               key={patient.id}
               className={cn(
@@ -103,16 +234,16 @@ const CaretakerDashboard = () => {
                 <div className="flex items-center gap-3">
                   <div className={cn(
                     "w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold",
-                    patient.riskLevel === 'high' ? 'bg-red-500' :
-                    patient.riskLevel === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                    patient.risk_level === 'high' || patient.risk_level === 'critical' ? 'bg-red-500' :
+                    patient.risk_level === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
                   )}>
                     {patient.avatar}
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-800 dark:text-gray-100">{patient.name}</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{patient.age} yrs • {patient.condition.split(',')[0]}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{patient.age} yrs • {patient.condition?.split(',')[0] || 'N/A'}</p>
                   </div>
-                  <RiskBadge level={patient.riskLevel} showIcon={false} />
+                  <RiskBadge level={patient.risk_level} showIcon={false} />
                 </div>
               </CardContent>
             </Card>
@@ -134,41 +265,51 @@ const CaretakerDashboard = () => {
                   </CardTitle>
                   <Badge variant="outline" className="text-gray-500 dark:text-gray-400 dark:border-slate-600">
                     <Clock className="h-3 w-3 mr-1" />
-                    Updated {formatTimeAgo(selectedPatient.lastUpdated)}
+                    Updated {selectedPatient.last_updated ? formatTimeAgo(selectedPatient.last_updated) : 'recently'}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <VitalsCard
-                    title="Heart Rate"
-                    value={selectedPatient.vitals.current.heartRate.value}
-                    unit={selectedPatient.vitals.current.heartRate.unit}
-                    status={selectedPatient.vitals.current.heartRate.status}
-                    icon="heartRate"
-                  />
-                  <VitalsCard
-                    title="Temperature"
-                    value={selectedPatient.vitals.current.temperature.value}
-                    unit={selectedPatient.vitals.current.temperature.unit}
-                    status={selectedPatient.vitals.current.temperature.status}
-                    icon="temperature"
-                  />
-                  <VitalsCard
-                    title="SpO₂"
-                    value={selectedPatient.vitals.current.spO2.value}
-                    unit={selectedPatient.vitals.current.spO2.unit}
-                    status={selectedPatient.vitals.current.spO2.status}
-                    icon="spO2"
-                  />
-                  <VitalsCard
-                    title="Blood Pressure"
-                    value={`${selectedPatient.vitals.current.bloodPressure.systolic}/${selectedPatient.vitals.current.bloodPressure.diastolic}`}
-                    unit={selectedPatient.vitals.current.bloodPressure.unit}
-                    status="normal"
-                    icon="bloodPressure"
-                  />
-                </div>
+                {loadingDetails ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+                  </div>
+                ) : patientDetails?.vitals ? (
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <VitalsCard
+                      title="Heart Rate"
+                      value={patientDetails.vitals.heart_rate?.value || '--'}
+                      unit="bpm"
+                      status={patientDetails.vitals.heart_rate?.status || 'normal'}
+                      icon="heartRate"
+                    />
+                    <VitalsCard
+                      title="Temperature"
+                      value={patientDetails.vitals.temperature?.value || '--'}
+                      unit="°C"
+                      status={patientDetails.vitals.temperature?.status || 'normal'}
+                      icon="temperature"
+                    />
+                    <VitalsCard
+                      title="SpO₂"
+                      value={patientDetails.vitals.spo2?.value || '--'}
+                      unit="%"
+                      status={patientDetails.vitals.spo2?.status || 'normal'}
+                      icon="spO2"
+                    />
+                    <VitalsCard
+                      title="Blood Pressure"
+                      value={patientDetails.vitals.blood_pressure?.systolic && patientDetails.vitals.blood_pressure?.diastolic
+                        ? `${patientDetails.vitals.blood_pressure.systolic}/${patientDetails.vitals.blood_pressure.diastolic}`
+                        : '--'}
+                      unit="mmHg"
+                      status={patientDetails.vitals.blood_pressure?.status || 'normal'}
+                      icon="bloodPressure"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-center text-gray-500 py-8">No vitals data available</p>
+                )}
               </CardContent>
             </Card>
 
@@ -207,9 +348,9 @@ const CaretakerDashboard = () => {
                 </Button>
                 <div className="pt-2 border-t dark:border-slate-700">
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Assigned Doctor:</p>
-                  <p className="text-sm font-medium dark:text-gray-100">{selectedPatient.assignedDoctor}</p>
+                  <p className="text-sm font-medium dark:text-gray-100">{selectedPatient.doctor_name || 'Not assigned'}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 mb-1">Emergency Contact:</p>
-                  <p className="text-sm font-medium dark:text-gray-100">{selectedPatient.emergencyContact}</p>
+                  <p className="text-sm font-medium dark:text-gray-100">{selectedPatient.emergency_contact || 'Not set'}</p>
                 </div>
               </CardContent>
             </Card>
@@ -238,7 +379,7 @@ const CaretakerDashboard = () => {
                     </Badge>
                   </div>
                   <div className="space-y-2">
-                    {selectedPatient.medications.map((med, index) => (
+                    {patientDetails?.medications?.map((med, index) => (
                       <div key={index} className="flex items-center justify-between text-sm">
                         <span className="text-blue-700 dark:text-blue-200">{med.name}</span>
                         <div className="flex items-center gap-2">
@@ -255,7 +396,7 @@ const CaretakerDashboard = () => {
                           </span>
                         </div>
                       </div>
-                    ))}
+                    )) || <p className="text-sm text-gray-500">No medications found</p>}
                   </div>
                 </div>
 
@@ -284,14 +425,14 @@ const CaretakerDashboard = () => {
                   <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
                     <Activity className="h-5 w-5 text-green-500 mx-auto mb-1" />
                     <p className="text-lg font-bold text-green-700 dark:text-green-400">
-                      {selectedPatient.vitals.current.heartRate.value}
+                      {patientDetails?.vitals?.heart_rate?.value || '--'}
                     </p>
                     <p className="text-xs text-green-600 dark:text-green-300">Current HR</p>
                   </div>
                   <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-center">
                     <Activity className="h-5 w-5 text-purple-500 mx-auto mb-1" />
                     <p className="text-lg font-bold text-purple-700 dark:text-purple-400">
-                      {selectedPatient.vitals.current.spO2.value}%
+                      {patientDetails?.vitals?.spo2?.value || '--'}%
                     </p>
                     <p className="text-xs text-purple-600 dark:text-purple-300">Current SpO₂</p>
                   </div>
@@ -300,27 +441,92 @@ const CaretakerDashboard = () => {
             </Card>
 
             {/* Alerts & Notifications */}
-            <AlertBanner 
-              alerts={selectedPatient.alerts.map((a, i) => ({
-                id: i,
-                type: a.type,
-                message: a.message,
-                timestamp: new Date(Date.now() - Math.random() * 86400000).toISOString(),
-                acknowledged: !a.active
-              }))}
-              title="Alerts & Notifications"
-              showAcknowledge
-              onAcknowledge={(id) => console.log('Acknowledged:', id)}
-            />
+            {patientDetails?.alerts && patientDetails.alerts.length > 0 ? (
+              <AlertBanner 
+                alerts={patientDetails.alerts.map((a) => ({
+                  id: a.id,
+                  type: a.severity,
+                  message: a.message,
+                  timestamp: a.timestamp,
+                  acknowledged: !a.active
+                }))}
+                title="Alerts & Notifications"
+                showAcknowledge
+                onAcknowledge={(id) => console.log('Acknowledged:', id)}
+              />
+            ) : (
+              <Card className="dark:bg-slate-800/50 dark:border-slate-700">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg dark:text-white">
+                    <Bell className="h-5 w-5 text-orange-500" />
+                    Alerts & Notifications
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <CheckCircle className="h-12 w-12 mx-auto mb-2 text-green-500" />
+                    <p>No active alerts</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
+          {/* Vitals Trend Charts */}
+          {chartData.heartRate.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                <Activity className="h-5 w-5 text-red-500" />
+                Vitals Trends (24h)
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <VitalsChart
+                  title="Heart Rate"
+                  data={chartData.heartRate}
+                  dataLabel="BPM"
+                  color="#ef4444"
+                  height={200}
+                />
+                <VitalsChart
+                  title="Blood Oxygen (SpO₂)"
+                  data={chartData.spO2}
+                  dataLabel="%"
+                  color="#3b82f6"
+                  height={200}
+                />
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <VitalsChart
+                  title="Temperature"
+                  data={chartData.temperature}
+                  dataLabel="°C"
+                  color="#f59e0b"
+                  height={200}
+                />
+                <VitalsChart
+                  title="Blood Pressure"
+                  data={chartData.bloodPressure.systolic}
+                  dataLabel="Systolic"
+                  color="#8b5cf6"
+                  height={200}
+                  showLegend={true}
+                  secondaryData={chartData.bloodPressure.diastolic}
+                  secondaryLabel="Diastolic"
+                  secondaryColor="#06b6d4"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Patient Notes */}
-          {selectedPatient.notes && (
+          {selectedPatient.condition && (
             <Card className="dark:bg-slate-800/50 dark:border-slate-700">
               <CardContent className="p-4">
                 <div className="bg-gray-50 dark:bg-slate-700/50 rounded-lg p-4">
                   <h4 className="font-medium text-gray-700 dark:text-gray-200 mb-2">Care Notes</h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">{selectedPatient.notes}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Patient condition: {selectedPatient.condition}. Regular monitoring and medication adherence required.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -349,14 +555,14 @@ const CaretakerDashboard = () => {
                 </div>
               ) : callType === 'doctor' ? (
                 <div className="mt-4">
-                  <p className="text-gray-600 dark:text-gray-300">Calling {selectedPatient?.assignedDoctor}</p>
+                  <p className="text-gray-600 dark:text-gray-300">Calling {selectedPatient?.doctor_name || 'Doctor'}</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                     The doctor will receive patient context before the call connects.
                   </p>
                 </div>
               ) : (
                 <div className="mt-4">
-                  <p className="text-gray-600 dark:text-gray-300">Contacting family at {selectedPatient?.emergencyContact}</p>
+                  <p className="text-gray-600 dark:text-gray-300">Contacting family at {selectedPatient?.emergency_contact || 'Emergency contact'}</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                     You can share patient status updates with family members.
                   </p>
