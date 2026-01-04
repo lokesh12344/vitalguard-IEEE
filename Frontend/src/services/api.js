@@ -11,6 +11,7 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
 class ApiService {
   constructor() {
     this.baseUrl = `${API_BASE_URL}/api/public`;
+    this.chatBaseUrl = `${API_BASE_URL}/api/chat`;
   }
 
   async request(endpoint, options = {}) {
@@ -35,6 +36,33 @@ class ApiService {
       return await response.json();
     } catch (error) {
       console.error(`API Error [${endpoint}]:`, error);
+      throw error;
+    }
+  }
+
+  // Chat-specific request method (uses /api/chat instead of /api/public)
+  async chatRequest(endpoint, options = {}) {
+    const url = `${this.chatBaseUrl}${endpoint}`;
+    
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    try {
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error(`Chat API Error [${endpoint}]:`, error);
       throw error;
     }
   }
@@ -159,17 +187,17 @@ class ApiService {
 
   // Get all conversations for a user
   async getChatConversations(userId) {
-    return this.request(`/chat/conversations/${userId}`);
+    return this.chatRequest(`/conversations/${userId}`);
   }
 
   // Get messages between two users
   async getChatMessages(userId, otherUserId, limit = 50) {
-    return this.request(`/chat/messages/${userId}/${otherUserId}?limit=${limit}`);
+    return this.chatRequest(`/messages/${userId}/${otherUserId}?limit=${limit}`);
   }
 
   // Send a message
   async sendChatMessage(senderId, receiverId, message) {
-    return this.request('/chat/send', {
+    return this.chatRequest('/send', {
       method: 'POST',
       body: JSON.stringify({
         sender_id: senderId,
@@ -181,19 +209,19 @@ class ApiService {
 
   // Mark messages as read
   async markMessagesAsRead(userId, otherUserId) {
-    return this.request(`/chat/mark-read/${userId}/${otherUserId}`, {
+    return this.chatRequest(`/mark-read/${userId}/${otherUserId}`, {
       method: 'POST',
     });
   }
 
   // Get available contacts for a user based on their role
   async getChatContacts(userId) {
-    return this.request(`/chat/contacts/${userId}`);
+    return this.chatRequest(`/contacts/${userId}`);
   }
 
   // Get unread message count
   async getUnreadMessageCount(userId) {
-    return this.request(`/chat/unread-count/${userId}`);
+    return this.chatRequest(`/unread-count/${userId}`);
   }
 }
 

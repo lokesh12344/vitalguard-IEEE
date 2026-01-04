@@ -14,7 +14,10 @@ import {
   Sparkles,
   Minimize2,
   Maximize2,
-  Activity
+  Activity,
+  FileText,
+  Upload,
+  CheckCircle
 } from 'lucide-react';
 import chatService from '../services/chatService';
 import { api } from '../services/api';
@@ -66,7 +69,7 @@ export default function AIChat({ patientContext = null, patientId = null }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: "Hello! I'm VitalGuard AI, your health assistant. I can help you with:\n\n• Diet recommendations for various conditions\n• Healthy juice and smoothie suggestions\n• Understanding your vital signs\n• General wellness advice\n\nHow can I assist you today?"
+      content: "Hello! I'm VitalGuard AI, your health assistant. I can help you with:\n\n• Diet recommendations for various conditions\n• Healthy juice and smoothie suggestions\n• Understanding your vital signs\n• **📄 Analyzing medical reports** - Upload a PDF and I'll explain it simply!\n• General wellness advice\n\nHow can I assist you today?"
     }
   ]);
   const [input, setInput] = useState('');
@@ -77,9 +80,12 @@ export default function AIChat({ patientContext = null, patientId = null }) {
   const [vitals, setVitals] = useState(null);
   const [vitalsLoading, setVitalsLoading] = useState(false);
   const [vitalsFetched, setVitalsFetched] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
   
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Format vitals for display
   const formatVitalsMessage = (vitalsData) => {
@@ -294,6 +300,72 @@ export default function AIChat({ patientContext = null, patientId = null }) {
     }
   };
 
+  // Handle PDF file selection
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (!file.name.toLowerCase().endsWith('.pdf')) {
+        setError('Please select a PDF file');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        setError('File size must be less than 10MB');
+        return;
+      }
+      setSelectedFile(file);
+      setError(null);
+    }
+  };
+
+  // Handle PDF upload and analysis
+  const handleUploadReport = async () => {
+    if (!selectedFile || uploadingFile) return;
+
+    setUploadingFile(true);
+    setError(null);
+
+    // Add user message showing file upload
+    setMessages(prev => [...prev, { 
+      role: 'user', 
+      content: `📄 Uploaded report: ${selectedFile.name}`,
+      isFileUpload: true
+    }]);
+
+    try {
+      const response = await chatService.analyzeReport(selectedFile);
+      
+      // Add AI analysis response
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: response.analysis,
+        isReportAnalysis: true
+      }]);
+      
+      // Clear selected file
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (err) {
+      console.error('Report analysis error:', err);
+      setError(err.message || 'Failed to analyze report');
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: `❌ Sorry, I couldn't analyze the report. ${err.message || 'Please try again.'}`
+      }]);
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  // Cancel file selection
+  const handleCancelFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   // Floating chat button
   if (!isOpen) {
     return (
@@ -478,20 +550,78 @@ export default function AIChat({ patientContext = null, patientId = null }) {
 
           {/* Input */}
           <div className="p-4 border-t bg-white rounded-b-2xl">
+            {/* File Selection Preview */}
+            {selectedFile && (
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2 text-blue-700">
+                  <FileText className="w-5 h-5" />
+                  <div>
+                    <p className="text-sm font-medium truncate max-w-[180px]">{selectedFile.name}</p>
+                    <p className="text-xs text-blue-500">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleUploadReport}
+                    disabled={uploadingFile || !isConnected}
+                    className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {uploadingFile ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        Analyze
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleCancelFile}
+                    disabled={uploadingFile}
+                    className="p-1.5 text-gray-500 hover:text-red-500 disabled:opacity-50"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <div className="flex gap-2">
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept=".pdf"
+                className="hidden"
+              />
+              
+              {/* Upload PDF Button */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || uploadingFile || !isConnected}
+                className="w-10 h-10 border border-gray-200 text-gray-500 rounded-xl flex items-center justify-center hover:bg-gray-50 hover:border-teal-500 hover:text-teal-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-500"
+                title="Upload PDF Report"
+              >
+                <Upload className="w-5 h-5" />
+              </button>
+              
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask about diet, health tips, juices..."
-                disabled={isLoading || !isConnected}
+                placeholder="Ask about diet, health tips, or upload a report..."
+                disabled={isLoading || uploadingFile || !isConnected}
                 className="flex-1 resize-none border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-50 disabled:cursor-not-allowed"
                 rows={1}
               />
               <button
                 onClick={handleSend}
-                disabled={!input.trim() || isLoading || !isConnected}
+                disabled={!input.trim() || isLoading || uploadingFile || !isConnected}
                 className="w-10 h-10 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-xl flex items-center justify-center hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
               >
                 {isLoading ? (
@@ -502,7 +632,7 @@ export default function AIChat({ patientContext = null, patientId = null }) {
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-2 text-center">
-              Powered by Ollama • Always consult a doctor for medical advice
+              📄 Upload PDF reports for analysis • Powered by Ollama
             </p>
           </div>
         </>

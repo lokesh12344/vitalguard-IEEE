@@ -65,29 +65,27 @@ const DoctorDashboard = () => {
         websocket.subscribeToAlerts();
         console.log('✅ WebSocket connected and subscribed to alerts');
         
-        // Listen for regular alerts from WebSocket
+        // Listen for regular alerts from WebSocket (warnings, etc.)
         const handleWebSocketAlert = (alert) => {
-          console.log('📢 WebSocket Alert Received:', alert);
-          const formattedAlert = {
-            ...alert,
-            id: alert.id || Date.now(),
-            timestamp: alert.created_at || new Date().toISOString(),
-            type: alert.severity === 'critical' ? 'high_risk' : 'warning',
-            acknowledged: alert.is_acknowledged || false
-          };
-          setRealtimeAlerts(prev => [formattedAlert, ...prev].slice(0, 20));
-          
-          // Refresh data
-          refetchPatients();
-          refetchAlerts();
+          // Only add to notification list, no popup, no sound
+          if (alert.severity !== 'critical') {
+            const formattedAlert = {
+              ...alert,
+              id: alert.id || `ws-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              timestamp: alert.created_at || new Date().toISOString(),
+              type: alert.severity === 'critical' ? 'high_risk' : 'warning',
+              acknowledged: alert.is_acknowledged || false
+            };
+            setRealtimeAlerts(prev => [formattedAlert, ...prev].slice(0, 20));
+          }
         };
-        
+
         // Listen for HIGH RISK alerts specifically
         const handleHighRiskAlert = (alert) => {
           console.log('🚨🚨🚨 HIGH RISK ALERT:', alert);
           const formattedAlert = {
             ...alert,
-            id: alert.id || Date.now(),
+            id: alert.id || `hr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             patientId: alert.patient_id,  // Map snake_case to camelCase
             patientName: alert.patient_name,  // Map snake_case to camelCase
             timestamp: alert.created_at || new Date().toISOString(),
@@ -97,16 +95,13 @@ const DoctorDashboard = () => {
           setRealtimeAlerts(prev => [formattedAlert, ...prev].slice(0, 20));
           setLatestAlert(formattedAlert);
           setShowAlertPopup(true);
-          
           // Play alert sound for high risk
           if (soundEnabled) {
             alertNotifications.playAlertSound();
           }
-          
           // Refresh data immediately
           refetchPatients();
           refetchAlerts();
-          
           // Auto-hide popup after 15 seconds
           setTimeout(() => {
             setShowAlertPopup(false);
@@ -133,6 +128,7 @@ const DoctorDashboard = () => {
       // Ensure patientId is set (could be from patient_id or patientId)
       const formattedAlert = {
         ...alert,
+        id: alert.id || `mem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         patientId: alert.patientId || alert.patient_id,
         patientName: alert.patientName || alert.patient_name
       };
@@ -149,7 +145,11 @@ const DoctorDashboard = () => {
     // Also subscribe to general alerts
     const unsubscribeGeneral = alertNotifications.onAlert((alert) => {
       if (alert.type !== 'high_risk') {
-        setRealtimeAlerts(prev => [alert, ...prev].slice(0, 20));
+        const formattedAlert = {
+          ...alert,
+          id: alert.id || `gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        };
+        setRealtimeAlerts(prev => [formattedAlert, ...prev].slice(0, 20));
       }
     });
 
@@ -545,9 +545,9 @@ const DoctorDashboard = () => {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="space-y-2 max-h-40 overflow-y-auto">
-              {realtimeAlerts.slice(0, 5).map((alert) => (
+              {realtimeAlerts.slice(0, 5).map((alert, index) => (
                 <div 
-                  key={alert.id} 
+                  key={`${alert.id}-${index}`} 
                   className={cn(
                     "flex items-center justify-between p-2 rounded-lg border transition-all cursor-pointer hover:shadow-md",
                     alert.type === 'high_risk' 

@@ -3,11 +3,12 @@ AI Chat Router - Integrates Ollama LLM for health assistance
 Provides diet recommendations, juice suggestions, and health queries
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import json
+import fitz  # PyMuPDF for PDF processing
 
 from app.services.ollama_service import OllamaService
 
@@ -237,4 +238,104 @@ async def get_health_tips(topic: Optional[str] = "general wellness"):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get health tips: {str(e)}"
+        )
+
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """Extract text content from a PDF file."""
+    text_content = []
+    
+    try:
+        # Open PDF from bytes
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            text = page.get_text()
+            if text.strip():
+                text_content.append(f"--- Page {page_num + 1} ---\n{text}")
+        
+        doc.close()
+        return "\n\n".join(text_content)
+    except Exception as e:
+        raise Exception(f"Failed to extract text from PDF: {str(e)}")
+
+
+@router.post("/analyze-report")
+async def analyze_medical_report(file: UploadFile = File(...)):
+    """
+    Upload a PDF medical report and get an AI-powered explanation in simple language.
+    The AI will analyze the report and explain it in easy-to-understand terms.
+    """
+    # Validate file type
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are supported. Please upload a PDF file."
+        )
+    
+    # Check file size (max 10MB)
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="File size too large. Maximum allowed size is 10MB."
+        )
+    
+    try:
+        # Extract text from PDF
+        extracted_text = extract_text_from_pdf(contents)
+        
+        if not extracted_text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract any text from the PDF. The file might be scanned or image-based."
+            )
+        
+        # Truncate if too long (keep first 8000 chars for context window)
+        if len(extracted_text) > 8000:
+            extracted_text = extracted_text[:8000] + "\n\n[... Report truncated for analysis ...]"
+        
+        # Create prompt for AI analysis
+        analysis_prompt = f"""You are a helpful medical assistant. A patient has uploaded their medical test report and needs help understanding it.
+
+IMPORTANT GUIDELINES:
+1. Explain the report in SIMPLE, EASY-TO-UNDERSTAND language that anyone can understand
+2. Avoid complex medical jargon - if you must use medical terms, explain them simply
+3. Highlight the KEY FINDINGS - what's normal and what needs attention
+4. Use bullet points and clear sections for readability
+5. Be reassuring but honest about any concerning findings
+6. Always recommend discussing results with their doctor for proper medical advice
+7. Do NOT diagnose or prescribe - only explain what the values mean
+
+Here is the medical report content:
+
+{extracted_text}
+
+Please provide:
+1. 📋 **Report Summary** - What type of test is this and what does it check for?
+2. ✅ **Normal Results** - Which values are in the healthy range?
+3. ⚠️ **Values to Note** - Any values that are outside normal range (explain what they mean in simple terms)
+4. 💡 **What This Means** - A simple explanation of the overall findings
+5. 👨‍⚕️ **Next Steps** - General advice (always emphasizing to consult their doctor)
+
+Remember: Explain like you're talking to someone with no medical background."""
+
+        # Get AI response
+        response = await ollama_service.chat(message=analysis_prompt)
+        
+        return {
+            "filename": file.filename,
+            "analysis": response,
+            "model": ollama_service.model,
+            "pages_analyzed": extracted_text.count("--- Page"),
+            "message": "Report analyzed successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to analyze report: {str(e)}"
         )

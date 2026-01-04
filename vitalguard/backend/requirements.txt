@@ -27,6 +27,9 @@ python-socketio==5.11.0
 # Twilio
 twilio==8.13.0
 
+# PDF Processing
+PyMuPDF==1.23.8
+
 # Utilities
 python-dateutil==2.8.2
 httpx==0.26.0

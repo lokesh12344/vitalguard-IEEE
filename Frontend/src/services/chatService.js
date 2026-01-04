@@ -182,6 +182,36 @@ class ChatService {
   async getEnergyJuices() {
     return this.request('/quick/energy-juices');
   }
+
+  /**
+   * Upload and analyze a PDF medical report
+   * @param {File} file - PDF file to analyze
+   * @returns {Promise} Analysis result
+   */
+  async analyzeReport(file) {
+    const url = `${this.baseUrl}/analyze-report`;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        // Note: Don't set Content-Type header - browser will set it with boundary for FormData
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Report analysis error:', error);
+      throw error;
+    }
+  }
 }
 
 export const chatService = new ChatService();
