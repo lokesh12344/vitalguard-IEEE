@@ -10,10 +10,9 @@ from app.socket_manager import sio
 from app.routers import auth, patients, vitals, medications, alerts
 from app.routers.public import router as public_router
 from app.routers.chat import router as chat_router
+from app.routers.ai_chat import router as ai_chat_router
 from app.services.simulator import vital_simulator
 from app.services.seeder import run_seeder
-# Import models to ensure they're registered with Base metadata
-from app.models import User, Patient, VitalReading, Medication, MedicationLog, Alert, ChatMessage, ChatRoom
 
 # Configure logging
 logging.basicConfig(
@@ -61,14 +60,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware - must be added BEFORE Socket.IO wrapping
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # In production, specify exact origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
 # Include routers
@@ -78,7 +76,8 @@ app.include_router(vitals.router, prefix="/api")
 app.include_router(medications.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(public_router, prefix="/api")
-app.include_router(chat_router, prefix="/api/public")
+app.include_router(chat_router, prefix="/api")
+app.include_router(ai_chat_router, prefix="/api")
 
 
 # Health check endpoint
@@ -96,12 +95,8 @@ async def root():
     }
 
 
-# Mount Socket.IO with CORS support
-socket_app = socketio.ASGIApp(
-    sio, 
-    other_asgi_app=app,
-    socketio_path="/socket.io"
-)
+# Mount Socket.IO
+socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
 
 # For running with uvicorn directly
 app = socket_app
