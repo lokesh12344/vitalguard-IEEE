@@ -5,6 +5,10 @@ import PatientDashboard from '@/pages/PatientDashboard';
 import DoctorDashboard from '@/pages/DoctorDashboard';
 import CaretakerDashboard from '@/pages/CaretakerDashboard';
 import AdminRegistration from '@/pages/AdminRegistration';
+import AIChat from '@/components/AIChat';
+
+// Current patient ID - In a real app, this would come from auth context
+const CURRENT_PATIENT_ID = 1;
 
 function App() {
   const [currentRole, setCurrentRole] = useState('patient');
@@ -28,11 +32,18 @@ function App() {
     }
   };
 
+  // Only pass patientId when in patient role
+  const getPatientIdForChat = () => {
+    return currentRole === 'patient' ? CURRENT_PATIENT_ID : null;
+  };
+
   return (
     <ThemeProvider>
       <DashboardLayout currentRole={currentRole} onRoleChange={handleRoleChange}>
         {renderDashboard()}
       </DashboardLayout>
+      {/* AI Health Assistant - Available on all pages */}
+      <AIChat patientId={getPatientIdForChat()} />
     </ThemeProvider>
   );
 }
