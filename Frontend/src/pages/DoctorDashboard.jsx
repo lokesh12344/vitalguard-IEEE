@@ -56,18 +56,16 @@ const DoctorDashboard = () => {
   const [triggeringSOS, setTriggeringSOS] = useState(false);
   const [sosSuccess, setSosSuccess] = useState(false);
 
-  // Subscribe to real-time high risk alerts via WebSocket
+  // Subscribe to real-time high risk alerts and vital updates via WebSocket
   useEffect(() => {
-    // Connect to WebSocket and subscribe to alerts
     const setupWebSocket = async () => {
       try {
         await websocket.connect();
         websocket.subscribeToAlerts();
         console.log('✅ WebSocket connected and subscribed to alerts');
-        
+
         // Listen for regular alerts from WebSocket (warnings, etc.)
         const handleWebSocketAlert = (alert) => {
-          // Only keep high risk/critical alerts, ignore warnings/info
           if (alert.severity === 'critical') {
             const formattedAlert = {
               ...alert,
@@ -86,8 +84,8 @@ const DoctorDashboard = () => {
           const formattedAlert = {
             ...alert,
             id: alert.id || `hr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            patientId: alert.patient_id,  // Map snake_case to camelCase
-            patientName: alert.patient_name,  // Map snake_case to camelCase
+            patientId: alert.patient_id,
+            patientName: alert.patient_name,
             timestamp: alert.created_at || new Date().toISOString(),
             type: 'high_risk',
             acknowledged: false
@@ -95,37 +93,41 @@ const DoctorDashboard = () => {
           setRealtimeAlerts(prev => [formattedAlert, ...prev].slice(0, 20));
           setLatestAlert(formattedAlert);
           setShowAlertPopup(true);
-          // Play alert sound for high risk
           if (soundEnabled) {
             alertNotifications.playAlertSound();
           }
-          // Refresh data immediately
           refetchPatients();
           refetchAlerts();
-          // Auto-hide popup after 15 seconds
           setTimeout(() => {
             setShowAlertPopup(false);
           }, 15000);
         };
-        
+
+        // Listen for vital updates and refresh patient list
+        const handleVitalUpdate = (data) => {
+          // Any vital update should trigger a patient list refresh
+          refetchPatients();
+        };
+
         websocket.on('alert:new', handleWebSocketAlert);
         websocket.on('alert:high_risk', handleHighRiskAlert);
-        
+        websocket.on('vital:update', handleVitalUpdate);
+
         return () => {
           websocket.off('alert:new', handleWebSocketAlert);
           websocket.off('alert:high_risk', handleHighRiskAlert);
+          websocket.off('vital:update', handleVitalUpdate);
         };
       } catch (err) {
         console.log('WebSocket connection failed, using fallback:', err);
       }
     };
-    
+
     setupWebSocket();
-    
+
     // Also keep in-memory alerts as fallback
     const unsubscribe = alertNotifications.onHighRiskAlert((alert) => {
       console.log('🚨 In-Memory Alert Received:', alert);
-      // Ensure patientId is set (could be from patient_id or patientId)
       const formattedAlert = {
         ...alert,
         id: alert.id || `mem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -135,8 +137,6 @@ const DoctorDashboard = () => {
       setRealtimeAlerts(prev => [formattedAlert, ...prev].slice(0, 20));
       setLatestAlert(formattedAlert);
       setShowAlertPopup(true);
-      
-      // Auto-hide popup after 10 seconds
       setTimeout(() => {
         setShowAlertPopup(false);
       }, 10000);
@@ -144,7 +144,6 @@ const DoctorDashboard = () => {
 
     // Also subscribe to general alerts
     const unsubscribeGeneral = alertNotifications.onAlert((alert) => {
-      // Only keep high risk/critical alerts, ignore warnings/info
       if (alert.type === 'high_risk') {
         const formattedAlert = {
           ...alert,
