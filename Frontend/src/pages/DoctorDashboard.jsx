@@ -719,7 +719,11 @@ const DoctorDashboard = () => {
                         <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
                           <Users className="h-4 w-4 text-gray-400" />
                           <span className="font-medium dark:text-gray-400">Caretaker:</span>
-                          <span className="dark:text-gray-200">{selectedPatient.caretaker || 'Not assigned'}</span>
+                          <span className="dark:text-gray-200">
+                            {selectedPatient.caretaker && selectedPatient.caretaker !== 'Not assigned'
+                              ? `Assigned (${selectedPatient.caretaker})`
+                              : 'Not assigned'}
+                          </span>
                         </div>
                       </div>
                       <div className="space-y-3">
