@@ -67,13 +67,13 @@ const DoctorDashboard = () => {
         
         // Listen for regular alerts from WebSocket (warnings, etc.)
         const handleWebSocketAlert = (alert) => {
-          // Only add to notification list, no popup, no sound
-          if (alert.severity !== 'critical') {
+          // Only keep high risk/critical alerts, ignore warnings/info
+          if (alert.severity === 'critical') {
             const formattedAlert = {
               ...alert,
               id: alert.id || `ws-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               timestamp: alert.created_at || new Date().toISOString(),
-              type: alert.severity === 'critical' ? 'high_risk' : 'warning',
+              type: 'high_risk',
               acknowledged: alert.is_acknowledged || false
             };
             setRealtimeAlerts(prev => [formattedAlert, ...prev].slice(0, 20));
@@ -144,7 +144,8 @@ const DoctorDashboard = () => {
 
     // Also subscribe to general alerts
     const unsubscribeGeneral = alertNotifications.onAlert((alert) => {
-      if (alert.type !== 'high_risk') {
+      // Only keep high risk/critical alerts, ignore warnings/info
+      if (alert.type === 'high_risk') {
         const formattedAlert = {
           ...alert,
           id: alert.id || `gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -161,13 +162,10 @@ const DoctorDashboard = () => {
 
   // Auto-refresh patients list to show newly registered patients
   useEffect(() => {
-    const interval = setInterval(() => {
-      refetchPatients();
-      refetchAlerts();
-      setLastRefresh(new Date());
-    }, AUTO_REFRESH_INTERVAL);
-
-    return () => clearInterval(interval);
+    // Removed auto-refresh interval to prevent UI refresh issues
+    // If you want to manually refresh, use the Refresh button in the UI
+    // Data will still update on real-time events and manual refresh
+    // No interval set here
   }, [refetchPatients, refetchAlerts]);
 
   // Calculate dashboard stats
@@ -190,23 +188,35 @@ const DoctorDashboard = () => {
   }, [patients, alerts]);
 
   // Transform patients for PatientList component
+  // Only show high/critical risk if vitals are abnormal, else show medium/low
   const patientsByRisk = useMemo(() => {
     if (!patients) return [];
-    
-    return patients.map(p => ({
-      id: p.id,
-      name: p.name,
-      age: p.age,
-      avatar: p.avatar,
-      condition: p.condition,
-      riskLevel: p.risk_level,
-      riskScore: p.risk_level === 'critical' ? 90 : p.risk_level === 'high' ? 75 : p.risk_level === 'medium' ? 50 : 25,
-      lastUpdated: p.last_updated,
-      gender: 'Unknown',
-      emergencyContact: p.emergency_contact,
-      assignedDoctor: p.doctor_name,
-      caretaker: p.caretaker_name,
-    }));
+    return patients.map(p => {
+      // If backend says low/medium, always show as such
+      let riskLevel = p.risk_level;
+      // If backend says high/critical, but all vitals are normal, downgrade to medium
+      if ((p.risk_level === 'high' || p.risk_level === 'critical') && p.vitals && p.vitals.current) {
+        const v = p.vitals.current;
+        const allNormal = [v.heartRate, v.temperature, v.spO2, v.bloodPressure].every(
+          vital => vital && (vital.status === 'normal' || vital.status === undefined)
+        );
+        if (allNormal) riskLevel = 'medium';
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        age: p.age,
+        avatar: p.avatar,
+        condition: p.condition,
+        riskLevel,
+        riskScore: riskLevel === 'critical' ? 90 : riskLevel === 'high' ? 75 : riskLevel === 'medium' ? 50 : 25,
+        lastUpdated: p.last_updated,
+        gender: 'Unknown',
+        emergencyContact: p.emergency_contact,
+        assignedDoctor: p.doctor_name,
+        caretaker: p.caretaker_name,
+      };
+    });
   }, [patients]);
 
   // Fetch patient details when selected
